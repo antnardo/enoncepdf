@@ -1,6 +1,6 @@
 # enoncepdf — reference
 
-This is the complete reference of enoncepdf 0.1. The [README](../README.md) is the
+This is the complete reference of enoncepdf 0.2. The [README](../README.md) is the
 tour; this document says what every public name does, what it returns and what it
 raises, and how the analyses decide.
 
@@ -589,13 +589,7 @@ uv run python scripts/survey.py --compare before.json after.json
 
 The dump holds, per file, page count, headings, questions, margins, the crops of the
 whole document, of each heading of level 1 or less and of questions 1 to 3, the
-numbering profile and the blocks of page 1. Version 0.1, reading through pdfium, was
-measured this way against an earlier reader built on PyMuPDF, on 185 papers and
-reports from 1998 to 2026: the same questions on all but three papers, which gained
-some; headings gained on 25 papers and lost on 8 (captions and stray numbers the older
-reader took for headings); crops within 1 bp on 144 papers; on the others the margins
-differ, and a review by eye found the pdfium reader right more often than not —
-chiefly footers the older reader kept and figure text it did not see.
+numbering profile and the blocks of page 1.
 
 ## 19. Troubleshooting
 

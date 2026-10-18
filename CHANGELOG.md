@@ -9,19 +9,17 @@ The output of a crop is its page and its trim; how they are written is the calle
 
 ### Changed
 
-- `Crop.latex` and `Statement.latex`, which wrote an `\includetoolargegraphics` line —
-  a command of one teacher's class, not of LaTeX —, give way to `Crop.format` and
-  `Statement.format`, which write a crop with any `str.format` template: fields
-  `{page}`, `{left}`, `{bottom}`, `{right}`, `{top}`, `{trim}`, `{width}`, `{height}`,
-  `{file}`. The default, `GRAPHICX_TEMPLATE`, is a plain `\includegraphics` line. The
-  scale `latex` set on a slice taller than the page goes with it: a template of one's
-  own computes it from `height_cm` if it needs one.
+- `Crop.format` and `Statement.format` write crops with any `str.format` template
+  (fields `{page}`, `{left}`, `{bottom}`, `{right}`, `{top}`, `{trim}`, `{width}`,
+  `{height}`, `{file}`); the default, `GRAPHICX_TEMPLATE`, is a plain
+  `\includegraphics` line. They replace `Crop.latex` and `Statement.latex`, which wrote
+  a fixed command and chose a scale for slices taller than a page.
 - `Crop.trim_option` is removed: the `{trim}` field gives the same numbers.
 - On the command line, `crop` prints the page and the trim of each crop, in cm, and
   takes `--json`, `--latex` or `--template`, with `--file` for `{file}`; `trims` is
   merged into it. `blocks --from … --to …` takes the same options.
-- `CompiledStatement` and `inclusions` read `\includegraphics` and `\includepdf` by
-  default (`INCLUSION_COMMANDS`); a command of one's own is named with `commands=`.
+- `CompiledStatement` and `inclusions` read `\includegraphics` and `\includepdf`
+  (`INCLUSION_COMMANDS`); other inclusion commands are named with `commands=`.
 
 ### Added
 

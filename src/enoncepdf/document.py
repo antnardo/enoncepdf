@@ -11,7 +11,7 @@ sizes differ too much, though: a line number at size 6, set on the baseline of a
 at size 11, must stay apart to be recognised as a margin.
 
 pdfium reads every character the content stream draws, some of which nobody sees.
-What a reader of the page does not see is dropped, as PyMuPDF did:
+What a reader of the page does not see is dropped:
 
 - a character whose box falls outside the visible page (an imposed sheet keeps the
   footer of its neighbour there);
@@ -32,11 +32,6 @@ accent that old TeX fonts draw after its letter is put back before it, a space g
 wherever the gap between two characters exceeds 1.2 bp — pdfium's own generated
 spaces land after such an accent and would split the word — and rotated text keeps the
 order it was drawn in.
-
-Measured against the PyMuPDF reader this replaces, on 185 real exam statements
-(scripts/survey.py): the same questions everywhere but on three statements, which gain
-some; headings gained on 25 statements, lost on 8 (figure captions and stray numbers
-the old reader took for headings); crops within 1 bp on 144 statements.
 """
 
 import ctypes

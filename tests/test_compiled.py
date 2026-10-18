@@ -25,16 +25,16 @@ SOURCE = (
     "\\documentclass{book}\n"
     "\\begin{document}\n"
     "\\section{Premier problème}\n"
-    "\\includetoolargegraphics[page=1, trim=0cm 3cm 0cm 2cm, clip, scale=0.9]{paper}\n"
-    "% \\includetoolargegraphics[page=1]{other}\n"
-    "\\includetoolargegraphics{crop}\n"
+    "\\myinclude[page=1, trim=0cm 3cm 0cm 2cm, clip, scale=0.9]{paper}\n"
+    "% \\myinclude[page=1]{other}\n"
+    "\\myinclude{crop}\n"
     "\n"
     "\\section{Second problème}\n"
     "4) Une question tapée par LaTeX.\n"
     "\\end{document}\n"
 )
 # The statement wraps graphicx in a command of its own, as many teachers' classes do.
-COMMANDS = (*INCLUSION_COMMANDS, "includetoolargegraphics")
+COMMANDS = (*INCLUSION_COMMANDS, "myinclude")
 # The page of the paper, trimmed by trim: what it prints, at the height of its baseline.
 PAPER = [
     (800, "9) Une question cachée par le rognage du haut."),

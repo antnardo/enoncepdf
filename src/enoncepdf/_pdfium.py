@@ -5,8 +5,8 @@ write all its text at size 1 enlarged by the matrix, and its sizes would not com
 with those of another PDF.
 
 The **style** is the hard part. PDF has no notion of bold: a font is bold when its
-program draws thick strokes. PyMuPDF asks FreeType, which reads the style the font
-program declares; pdfium does not expose it. Its font weight is no substitute — the
+program draws thick strokes. FreeType reads the style the font program declares;
+pdfium does not expose it, and its font weight is no substitute — the
 descriptor's ``FontWeight`` is often missing, and pdfium then estimates it, 976 for a
 Latin Modern Roman regular. Measured on 439 fonts of 185 real exam statements, the
 signals that hold are, in order:
@@ -18,9 +18,6 @@ signals that hold are, in order:
   that a Word PDF's « CIDFont+F1 » is Calibri Bold;
 - for such an opaque name, a weight from 700 to 1000: a subset program stripped of
   its names declares « Regular » whatever it draws.
-
-This reads TeX fonts better than PyMuPDF did, which missed the bold of ``CMBX10`` in
-some files: on those 185 statements, 25 gain headings and none loses a question.
 """
 
 import ctypes
