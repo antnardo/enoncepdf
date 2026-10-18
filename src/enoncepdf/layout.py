@@ -132,7 +132,7 @@ class LayoutAnalysis:
             for line in doc.lines(page):
                 b = line.box
                 mask[int(b.y0) : int(np.ceil(b.y1)) + 1, int(b.x0) : int(np.ceil(b.x1)) + 1] = 0
-            for y0, y1 in _bands(mask.any(axis=1), gap=3):
+            for y0, y1 in _bands(np.asarray(mask.any(axis=1)), gap=3):
                 if y1 <= height * _BAND:
                     bands.append((page, y0, y1, MarginKind.HEADER))
                 elif y0 >= height * (1 - _BAND):
@@ -207,7 +207,7 @@ class LayoutAnalysis:
         lines = self.document.lines(page)
         margins = self.margins(page)
         blocks = []
-        for y0, y1 in _bands(ink.any(axis=1), gap):
+        for y0, y1 in _bands(np.asarray(ink.any(axis=1)), gap):
             columns = np.where(ink[y0 : y1 + 1].any(axis=0))[0]
             box = Box(float(columns[0]), float(y0), float(columns[-1] + 1), float(y1 + 1))
             inside = [line for line in lines if line.box.y1 > box.y0 and line.box.y0 < box.y1]
