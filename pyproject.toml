@@ -1,0 +1,105 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "enoncepdf"
+dynamic = ["version"]
+description = "Read exam statements in PDF: find their headings and questions, and crop them into slices without headers, footers or line numbers."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "antnardo", email = "antnardo@users.noreply.github.com" }]
+keywords = ["pdf", "exam", "questions", "crop", "latex", "synctex", "pdfium", "education"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
+    "Natural Language :: French",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Education",
+    "Topic :: Text Processing :: Markup :: LaTeX",
+    "Topic :: Utilities",
+    "Typing :: Typed",
+]
+dependencies = [
+    # Opens the PDFs, reads their characters with their fonts, renders the pages:
+    # a permissive licence (Apache-2.0 / BSD), where PyMuPDF would impose the AGPL.
+    "pypdfium2>=4.30",
+    # The ink masks of the pages, on which headers, blocks and crops are measured.
+    "numpy>=1.26",
+    # Contact sheets of pages and crops, and the style of an embedded font, read
+    # by FreeType: the only way to tell that "CIDFont+F1" is bold.
+    "pillow>=10.0",
+    # Reads the source of a compiled statement (enoncepdf.compiled); latexdetok
+    # needs Python 3.13, and without it a compiled statement finds no inclusion.
+    "latexdetok>=0.7.0 ; python_version >= '3.13'",
+]
+
+[project.urls]
+Homepage = "https://github.com/antnardo/enoncepdf"
+Documentation = "https://github.com/antnardo/enoncepdf/blob/main/docs/DOC.md"
+Repository = "https://github.com/antnardo/enoncepdf"
+Issues = "https://github.com/antnardo/enoncepdf/issues"
+Changelog = "https://github.com/antnardo/enoncepdf/blob/main/CHANGELOG.md"
+
+[project.scripts]
+enoncepdf = "enoncepdf.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    # The tests draw their exam statements with reportlab: no real subject ships.
+    "reportlab>=4.0",
+]
+
+# The version lives in the module: a single source, which the publish workflow
+# checks against the tag.
+[tool.hatch.version]
+path = "src/enoncepdf/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/enoncepdf"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/tests",
+    "/docs",
+    "/examples",
+    "/README.md",
+    "/LICENSE",
+    "/CHANGELOG.md",
+]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "N", "C4", "PTH", "RET"]
+ignore = ["RUF001", "RUF002", "RUF003"]  # unicode look-alikes: the prose quotes French typography
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+
+[tool.mypy]
+python_version = "3.11"
+files = ["src"]
+mypy_path = ["src"]
+explicit_package_bases = true
+ignore_missing_imports = true
