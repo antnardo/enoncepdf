@@ -161,8 +161,12 @@ call `close()`.
    direction.
 3. What nobody sees is dropped:
    - a character whose box centre lies outside the visible page;
-   - a fragment with no ink under any of its characters' tight boxes (clipped by a
-     clipping path, white on white, hidden under an image). The test is per fragment:
+   - a character whose centre falls outside the clipping path of its text object (the
+     bounding boxes of the path, intersected): the text of a figure included as a form
+     XObject keeps its whole page, clipped to the figure, and may lie right over the
+     running text;
+   - a fragment with no ink under any of its characters' tight boxes (white on white,
+     hidden under an image). The test is per fragment:
      some PDFs declare glyph widths that drift from what is drawn, and a lone last
      character can miss its own ink;
    - a character identical to one already read within 1 bp — a fake bold drawn by
@@ -563,7 +567,7 @@ whole document, of each heading of level 1 or less and of questions 1 to 3, the
 numbering profile and the blocks of page 1. Version 0.1, reading through pdfium, was
 measured this way against an earlier reader built on PyMuPDF, on 185 papers and
 reports from 1998 to 2026: the same questions on all but three papers, which gained
-some; headings gained on 31 papers and lost on 8 (captions and stray numbers the older
+some; headings gained on 25 papers and lost on 8 (captions and stray numbers the older
 reader took for headings); crops within 1 bp on 144 papers; on the others the margins
 differ, and a review by eye found the pdfium reader right more often than not —
 chiefly footers the older reader kept and figure text it did not see.

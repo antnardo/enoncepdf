@@ -87,6 +87,24 @@ def test_clipped_text_is_not_read(draw):
     assert texts(draw(paint)) == ["Visible"]
 
 
+def test_clipped_text_over_the_running_text_is_not_read(draw):
+    """The text of an included figure, clipped to the figure but lying where the running
+    text is printed: the ink is there, the clipping path says it is hidden."""
+
+    def paint(c):
+        c.setFont("Times-Roman", 12)
+        c.drawString(72, 700, "Le texte courant de la page")
+        c.saveState()
+        path = c.beginPath()
+        path.rect(100, 300, 300, 200)
+        c.clipPath(path, stroke=0, fill=0)
+        c.drawString(72, 700, "Texte de la figure, hors de son cadre")
+        c.drawString(150, 400, "Légende de la figure")
+        c.restoreState()
+
+    assert texts(draw(paint)) == ["Le texte courant de la page", "Légende de la figure"]
+
+
 def test_white_text_is_not_read(draw):
     def paint(c):
         c.setFont("Times-Roman", 12)

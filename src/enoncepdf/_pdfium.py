@@ -20,7 +20,7 @@ signals that hold are, in order:
   its names declares « Regular » whatever it draws.
 
 This reads TeX fonts better than PyMuPDF did, which missed the bold of ``CMBX10`` in
-some files: on those 185 statements, 31 gain headings and none loses a question.
+some files: on those 185 statements, 25 gain headings and none loses a question.
 """
 
 import ctypes

@@ -15,6 +15,9 @@ What a reader of the page does not see is dropped, as PyMuPDF did:
 
 - a character whose box falls outside the visible page (an imposed sheet keeps the
   footer of its neighbour there);
+- a character whose centre falls outside the clipping path of its text object —
+  the text of a figure's whole page, included as a form XObject and clipped to the
+  figure, which may lie right over the running text;
 - a fragment with no ink under any of its characters — clipped away, or white on
   white. The test is per fragment, not per character: some PDFs declare widths that
   drift from the glyphs drawn, and the box of a last digit can miss its own ink;
@@ -32,7 +35,7 @@ order it was drawn in.
 
 Measured against the PyMuPDF reader this replaces, on 185 real exam statements
 (scripts/survey.py): the same questions everywhere but on three statements, which gain
-some; headings gained on 31 statements, lost on 8 (figure captions and stray numbers
+some; headings gained on 25 statements, lost on 8 (figure captions and stray numbers
 the old reader took for headings); crops within 1 bp on 144 statements.
 """
 
@@ -225,6 +228,7 @@ def _fragments(
     tight = [ctypes.c_double() for _ in range(4)]
     seen: set[tuple[str, int, int]] = set()
     previous: tuple[str, Box] | None = None
+    clips: dict[int | None, tuple[float, float, float, float] | None] = {}
     for index in range(pdfium_c.FPDFText_CountChars(raw)):
         code = pdfium_c.FPDFText_GetUnicode(raw, index)
         # pdfium marks a hyphenation hyphen as 0x02
@@ -253,6 +257,15 @@ def _fragments(
             )
         if not (0 <= box.center_x <= width and 0 <= box.center_y <= height):
             continue
+        textobj = pdfium_c.FPDFText_GetTextObject(raw, index)
+        address = ctypes.cast(textobj, ctypes.c_void_p).value
+        if address not in clips:
+            clips[address] = _clip_area(textobj)
+        clip = clips[address]
+        if clip is not None:
+            x, y = (loose.left + loose.right) / 2, (loose.top + loose.bottom) / 2
+            if not (clip[0] <= x <= clip[2] and clip[1] <= y <= clip[3]):
+                continue
         key = (char, round(box.x0), round(baseline))
         ligature = previous == (char, box) and char in _LIGATURE_LETTERS
         if not ligature and any(
@@ -278,6 +291,37 @@ def _fragments(
             x0, x1, y0, y1 = (v.value for v in tight)  # left, right, bottom, top
             current.inked = _has_ink(ink, x0 - left, top - y1, x1 - left, top - y0)
     return fragments
+
+
+def _clip_area(textobj: ctypes.c_void_p) -> tuple[float, float, float, float] | None:
+    """The area the clipping path of a text object leaves visible, in PDF space: the
+    intersection of the bounding boxes of its paths, None without a clipping path.
+
+    A figure included as a form XObject keeps the text of its whole page, clipped to
+    the figure: that text may lie right over the running text, whose ink would let it
+    pass the ink test. Bounding boxes are enough: a clip is a rectangle almost always.
+    """
+    clip = pdfium_c.FPDFPageObj_GetClipPath(textobj)
+    if not clip:
+        return None
+    area: tuple[float, float, float, float] | None = None
+    x, y = ctypes.c_float(), ctypes.c_float()
+    for path in range(pdfium_c.FPDFClipPath_CountPaths(clip)):
+        xs, ys = [], []
+        for rank in range(pdfium_c.FPDFClipPath_CountPathSegments(clip, path)):
+            segment = pdfium_c.FPDFClipPath_GetPathSegment(clip, path, rank)
+            if pdfium_c.FPDFPathSegment_GetPoint(segment, ctypes.byref(x), ctypes.byref(y)):
+                xs.append(x.value)
+                ys.append(y.value)
+        if not xs:
+            continue
+        box = (min(xs), min(ys), max(xs), max(ys))
+        area = (
+            box
+            if area is None
+            else (max(area[0], box[0]), max(area[1], box[1]), min(area[2], box[2]), min(area[3], box[3]))
+        )
+    return area
 
 
 def _has_ink(ink: np.ndarray, x0: float, y0: float, x1: float, y1: float) -> bool:
