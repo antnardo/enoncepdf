@@ -11,6 +11,7 @@ from enum import StrEnum
 
 __all__ = [
     "BP_PER_CM",
+    "GRAPHICX_TEMPLATE",
     "Block",
     "BlockKind",
     "Box",
@@ -25,6 +26,8 @@ __all__ = [
 ]
 
 BP_PER_CM = 72 / 2.54
+#: The default output of a crop: graphicx's ``\includegraphics``, which any LaTeX has.
+GRAPHICX_TEMPLATE = "\\includegraphics[page={page}, trim={trim}, clip]{{{file}}}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -187,25 +190,38 @@ class Crop:
     @property
     def trim_cm(self) -> tuple[float, float, float, float]:
         """The trim as it is written: ``raw_trim_cm`` to the hundredth, never negative.
-        The LaTeX line and ``enoncepdf trims`` both read it, so that they give the same
-        numbers."""
+        Every output reads it, so that they all give the same numbers."""
         left, bottom, right, top = (round(max(v, 0.0), 2) for v in self.raw_trim_cm)
         return left, bottom, right, top
 
     @property
-    def trim_option(self) -> str:
-        """``trim=L B R U`` in cm, as graphicx reads it."""
-        return "trim=" + " ".join(f"{v:.2f}cm" for v in self.trim_cm)
+    def width_cm(self) -> float:
+        """The width of the kept box, in cm."""
+        return self.kept.width / BP_PER_CM
 
-    def latex(self, file: str, text_height: float = 666.8) -> str:
-        """The ``\\includetoolargegraphics`` line of the crop.
+    @property
+    def height_cm(self) -> float:
+        """The height of the kept box, in cm: what a caller compares with its page to
+        choose a scale."""
+        return self.kept.height / BP_PER_CM
 
-        ``\\includetoolargegraphics`` centres on the width but does not bound the height:
-        a slice taller than the text height makes the pagination loop. The scale that
-        makes it fit is then set, with a 3 % margin. ``text_height`` is in bp.
+    def format(self, template: str = GRAPHICX_TEMPLATE, file: str = "") -> str:
+        """The crop written with ``template``, a ``str.format`` template.
+
+        Fields: ``{page}``; ``{left}``, ``{bottom}``, ``{right}``, ``{top}``, the trim in
+        cm (``trim_cm``); ``{trim}``, the four of them as graphicx reads them
+        (« 1.23cm 1.72cm 1.88cm 26.25cm »); ``{width}`` and ``{height}`` of the kept box,
+        in cm; ``{file}``. Literal braces are doubled, as in any format string.
         """
-        options = f"page={self.page}, {self.trim_option}, clip"
-        if self.kept.height > text_height:
-            scale = int(text_height / self.kept.height * 0.97 * 100) / 100
-            options += f", scale={scale:.2f}"
-        return f"\\includetoolargegraphics[{options}]{{{file}}}"
+        left, bottom, right, top = self.trim_cm
+        return template.format(
+            page=self.page,
+            left=left,
+            bottom=bottom,
+            right=right,
+            top=top,
+            trim=" ".join(f"{v:.2f}cm" for v in self.trim_cm),
+            width=round(self.width_cm, 2),
+            height=round(self.height_cm, 2),
+            file=file,
+        )

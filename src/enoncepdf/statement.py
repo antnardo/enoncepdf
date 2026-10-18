@@ -8,7 +8,9 @@ crops behind one class, and each analysis runs only once, when first asked for::
     statement.crop("2.1", within="Partie Physique")        # a subpart
     statement.crop(questions=(1, 17))                       # a range of questions
     statement.crop(pages=(3, 9))                            # whole pages
-    print(statement.latex(crops))                           # the \\includetoolargegraphics lines
+    for crop in crops:
+        print(crop.page, crop.trim_cm)                      # what to keep: page and trim
+    print(statement.format(crops))                          # \\includegraphics lines
 """
 
 from pathlib import Path
@@ -19,7 +21,7 @@ from PIL import Image
 from enoncepdf.cropping import Cropper
 from enoncepdf.document import PdfDocument
 from enoncepdf.layout import LayoutAnalysis
-from enoncepdf.models import Block, Crop, Heading, Margin, Question
+from enoncepdf.models import GRAPHICX_TEMPLATE, Block, Crop, Heading, Margin, Question
 from enoncepdf.numbering import NumberingAnalysis, NumberingProfile
 from enoncepdf.sheet import ContactSheet
 from enoncepdf.structure import StructureAnalysis
@@ -105,10 +107,11 @@ class Statement:
     def crop_blocks(self, page: int, first: int, last: int | None = None, gap: int = 6) -> list[Crop]:
         return self.cropper.blocks(page, first, last, gap)
 
-    def latex(self, crops: list[Crop], file: str | None = None) -> str:
-        """One ``\\includetoolargegraphics`` line per crop, on the file name without .pdf."""
-        name = file or self.path.stem
-        return "\n".join(c.latex(name) for c in crops)
+    def format(self, crops: list[Crop], template: str = GRAPHICX_TEMPLATE, file: str | None = None) -> str:
+        """One line per crop, written with ``template`` (see ``Crop.format``); ``{file}``
+        is ``file``, or the name of the PDF without its suffix."""
+        name = self.path.stem if file is None else file
+        return "\n".join(c.format(template, name) for c in crops)
 
     def under(self, heading: str | Heading | None) -> tuple[list[Heading], list[Question]]:
         """The headings and questions placed under ``heading``, up to the next part — the

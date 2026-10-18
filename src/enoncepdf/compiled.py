@@ -1,9 +1,8 @@
 """A statement compiled from crops: its questions, found and placed in its PDF.
 
 An assignment is often not typed but pasted together from pages of past exam papers,
-trimmed — the ``\\includetoolargegraphics[page=2, trim=…, clip]{paper}`` lines that
-``Crop.latex`` writes. Its questions are in those papers, and that is where they are
-looked for:
+trimmed — ``\\includegraphics[page=2, trim=…, clip]{paper}``, the lines ``Crop.format``
+writes. Its questions are in those papers, and that is where they are looked for:
 
 - the source of the statement gives, in order, each included page — its file, its page,
   its trim, its scale — and the problem it falls in (``\\section``); latexdetok reads it
@@ -17,8 +16,8 @@ looked for:
 - its place in the compiled statement comes from SyncTeX: the box of the image is
   recorded between the line of the inclusion and the end of its paragraph, where TeX
   breaks the lines; it is recognised by its proportions, those of the visible part, and
-  by its width, that of the requested scale — ``\\includetoolargegraphics`` measures the
-  image at its natural size, a box recorded as well, before shrinking it. The
+  by its width, that of the requested scale — a command that shrinks an image to fit
+  the page measures it first at its natural size, a box recorded as well. The
   ``synctex`` tool refuses those records (« Ignored record »): the file, simple, is
   read here;
 - the text LaTeX typesets itself — a typed question, a problem written by hand — is
@@ -27,7 +26,12 @@ looked for:
 - the questions are found as anywhere else (questions.py), problem by problem.
 
 A page included as an image (a PNG, or a PDF without text) has nothing to read: its
-questions are not found. Reading the source takes latexdetok, hence Python 3.13 or
+questions are not found.
+
+The commands read as inclusions are ``\\includegraphics`` and ``\\includepdf``; a
+document that wraps them in a command of its own passes its name in ``commands``. Such a
+command is read like ``\\includegraphics``: an optional argument with ``page``, ``trim``
+and ``scale``, then the file. Reading the source takes latexdetok, hence Python 3.13 or
 later; without it, ``CompiledStatement.questions()`` returns an empty list.
 
 Coordinates are those of the package (models.py): bp, origin at the top left of the
@@ -37,7 +41,7 @@ page.
 import gzip
 import math
 import re
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
@@ -47,6 +51,7 @@ from enoncepdf.questions import marks, questions
 from enoncepdf.reading import PdfiumDocument
 
 __all__ = [
+    "INCLUSION_COMMANDS",
     "CompiledStatement",
     "Inclusion",
     "StatementQuestion",
@@ -55,7 +60,8 @@ __all__ = [
     "synctex_boxes",
 ]
 
-_IMAGES = ("includetoolargegraphics", "includegraphics", "includepdf")
+#: The inclusion commands read by default; ``commands=`` adds a document's own.
+INCLUSION_COMMANDS = ("includegraphics", "includepdf")
 _SYNCTEX_SUFFIXES = (".synctex.gz", ".synctex")
 # The lengths of graphicx, in bp: a trim without unit counts in bp.
 _UNITS = {
@@ -136,6 +142,9 @@ class CompiledStatement:
     may be a copy, taken when the PDF was read, so that an edit made since without
     recompiling does not shift its lines from those of the SyncTeX — the original folder
     is what says where the inclusions are and which file the SyncTeX names.
+
+    ``commands`` are the inclusion commands to read, without backslash: graphicx's and
+    pdfpages' by default, plus any the document defines around them.
     """
 
     def __init__(
@@ -145,8 +154,10 @@ class CompiledStatement:
         synctex: Path | str | None = None,
         log: Path | str | None = None,
         directory: Path | str | None = None,
+        commands: Iterable[str] = INCLUSION_COMMANDS,
     ) -> None:
         self.tex = Path(tex)
+        self.commands = tuple(commands)
         self.directory = Path(directory) if directory is not None else self.tex.parent
         self.pdf = Path(pdf) if pdf is not None else self.tex.with_suffix(".pdf")
         if synctex is not None:
@@ -157,7 +168,7 @@ class CompiledStatement:
         self.log = Path(log) if log is not None else self.tex.with_suffix(".log")
 
     def inclusions(self) -> list[Inclusion]:
-        return inclusions(self.tex.read_text(encoding="utf-8", errors="replace"))
+        return inclusions(self.tex.read_text(encoding="utf-8", errors="replace"), self.commands)
 
     def questions(self) -> list[StatementQuestion]:
         """The questions of the statement, problem by problem, where they fall in its PDF;
@@ -174,7 +185,7 @@ class CompiledStatement:
         by_problem: dict[int, list[Line]] = {}
         extents: list[SyncTeXBox] = []  # each image whole, hidden part included
         previous: tuple[int, float] = (0, -math.inf)
-        for inclusion in inclusions(source):
+        for inclusion in inclusions(source, self.commands):
             path = _find(inclusion.file, self.directory, self.tex.stem, read)
             if path is None or path.suffix.lower() != ".pdf":
                 continue
@@ -234,8 +245,9 @@ class CompiledStatement:
                     yield problem, line
 
 
-def inclusions(source: str) -> list[Inclusion]:
-    """The pages a statement's source includes, in order; nothing without latexdetok.
+def inclusions(source: str, commands: Iterable[str] = INCLUSION_COMMANDS) -> list[Inclusion]:
+    """The pages a statement's source includes with ``commands``, in order; nothing
+    without latexdetok.
 
     A ``\\section`` in the options of an ``\\includepdf`` (``pagecommand``) opens the
     problem of its pages.
@@ -245,7 +257,7 @@ def inclusions(source: str) -> list[Inclusion]:
     found: list[Inclusion] = []
     last_pages: list[int] = []  # the pages of the last inclusion
     last_end: tuple[int, int] = (0, 0)
-    for start, end, command, nodes in _commands(source):
+    for start, end, command, nodes in _commands(source, tuple(commands)):
         if command.name == "section":
             if command.star:
                 continue
@@ -312,7 +324,9 @@ def synctex_boxes(path: Path | str, source: Path | str) -> dict[int, list[SyncTe
 # -- internals ----------------------------------------------------------------------------
 
 
-def _commands(source: str) -> list[tuple[tuple[int, int], tuple[int, int], Any, list[Any]]]:
+def _commands(
+    source: str, images: tuple[str, ...] = ()
+) -> list[tuple[tuple[int, int], tuple[int, int], Any, list[Any]]]:
     """The ``\\section`` commands and the image inclusions, in order: their start and end
     (line, column), the command and its arguments; latexdetok skips what is commented."""
     try:
@@ -320,7 +334,7 @@ def _commands(source: str) -> list[tuple[tuple[int, int], tuple[int, int], Any, 
     except ImportError:
         return []
     tree = TexFile(source.splitlines(keepends=True)).analyse()
-    found = tree.get_commands_arguments(["section", *_IMAGES], nargs=1, nopt=1)
+    found = tree.get_commands_arguments(["section", *images], nargs=1, nopt=1)
     commands = []
     for group in found.content:
         nodes = [node for node in group.content if str(node).strip()]
@@ -465,8 +479,8 @@ def _image_box(
     and the end of its paragraph, with the proportions of the visible part, the first
     after that of the previous inclusion (``previous``: its page and its bottom).
 
-    It is no wider than the visible part at the requested scale —
-    ``\\includetoolargegraphics`` only shrinks it, to fit the page —, nor tiny, like a
+    It is no wider than the visible part at the requested scale — a command may shrink
+    it further, to fit the page —, nor tiny, like a
     figure in a margin with the same proportions. A shrunk image leaves two boxes on the
     same baseline: its natural size and the printed one, the smaller.
     """

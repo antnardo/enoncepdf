@@ -1,12 +1,12 @@
 from enoncepdf import Statement
 
 
-def test_latex_one_line_per_crop_on_the_file_stem(centrale):
+def test_format_one_line_per_crop_on_the_file_stem(centrale):
     crops = centrale.crop(pages=(1, 2))
-    lines = centrale.latex(crops).splitlines()
+    lines = centrale.format(crops).splitlines()
     assert len(lines) == 2
-    assert lines[0].endswith("{centrale}") and "page=1" in lines[0]
-    assert centrale.latex(crops, "other").endswith("{other}")
+    assert lines[0].startswith("\\includegraphics[page=1, trim=") and lines[0].endswith("{centrale}")
+    assert centrale.format(crops, "{page}:{file}", "other").splitlines() == ["1:other", "2:other"]
 
 
 def test_under_a_part_leaves_the_part_heading_out(polytechnique):

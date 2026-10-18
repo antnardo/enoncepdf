@@ -6,6 +6,7 @@ command line: ``enoncepdf --help``.
 """
 
 from enoncepdf.compiled import (
+    INCLUSION_COMMANDS,
     CompiledStatement,
     Inclusion,
     StatementQuestion,
@@ -18,6 +19,7 @@ from enoncepdf.document import PdfDocument
 from enoncepdf.layout import LayoutAnalysis
 from enoncepdf.models import (
     BP_PER_CM,
+    GRAPHICX_TEMPLATE,
     Block,
     BlockKind,
     Box,
@@ -38,10 +40,12 @@ from enoncepdf.statement import Statement
 from enoncepdf.structure import StructureAnalysis, normalize
 from enoncepdf.text import readable_text
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "BP_PER_CM",
+    "GRAPHICX_TEMPLATE",
+    "INCLUSION_COMMANDS",
     "Block",
     "BlockKind",
     "Box",

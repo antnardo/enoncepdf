@@ -23,19 +23,18 @@ def test_trim_clamped_at_zero_and_rounded():
     assert crop.trim_cm == (0.0, 0.0, 0.0, round(10 / BP_PER_CM, 2))
 
 
-def test_latex_without_scale_when_the_slice_fits():
+def test_default_format_is_a_graphicx_line():
     crop = Crop(3, Box(50, 100, 540, 400), 595.0, 842.0)
-    assert crop.latex("paper").startswith("\\includetoolargegraphics[page=3, trim=")
-    assert "scale" not in crop.latex("paper")
-
-
-@pytest.mark.parametrize(("height", "scale"), [(700.0, "0.92"), (800.0, "0.80")])
-def test_latex_sets_the_scale_of_a_slice_too_tall(height, scale):
-    crop = Crop(4, Box(40, 40, 550, 40 + height), 595.0, 842.0)
-    assert f"scale={scale}" in crop.latex("paper")
-
-
-def test_latex_writes_the_rounded_trim():
-    crop = Crop(2, Box(34.9, 744.1, 541.7, 793.2), 595.0, 842.0)
     expected = " ".join(f"{v:.2f}cm" for v in crop.trim_cm)
-    assert f"trim={expected}, clip" in crop.latex("paper")
+    assert crop.format(file="paper") == f"\\includegraphics[page=3, trim={expected}, clip]{{paper}}"
+
+
+def test_format_fields_for_any_command():
+    crop = Crop(2, Box(BP_PER_CM, 2 * BP_PER_CM, 500, 800), 595.0, 842.0)
+    line = crop.format("\\mine[{page}]{{{left:.1f} {top:.1f}}}{{{file}}} {width} {height}", "s")
+    assert line == f"\\mine[2]{{1.0 2.0}}{{s}} {round(crop.width_cm, 2)} {round(crop.height_cm, 2)}"
+
+
+def test_size_of_the_kept_box_in_cm():
+    crop = Crop(1, Box(0, 0, 2 * BP_PER_CM, 3 * BP_PER_CM), 595.0, 842.0)
+    assert (crop.width_cm, crop.height_cm) == pytest.approx((2, 3))

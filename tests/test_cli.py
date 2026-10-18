@@ -33,17 +33,30 @@ def test_structure_lists_headings_and_questions(centrale, capsys):
     assert "I.A –" in out and "Questions: 8" in out
 
 
-def test_trims_as_json(centrale, capsys):
-    assert main(["trims", str(centrale.path), "--questions", "Q1-3", "--json"]) == 0
+def test_crop_gives_page_and_trim_by_default(centrale, capsys):
+    assert main(["crop", str(centrale.path), "--questions", "Q1-3"]) == 0
+    [line] = capsys.readouterr().out.splitlines()
+    assert line.startswith("page 1 ") and all(f" {side}=" in line for side in "BRU")
+
+
+def test_crop_as_json(centrale, capsys):
+    assert main(["crop", str(centrale.path), "--questions", "Q1-3", "--json"]) == 0
     [trim] = json.loads(capsys.readouterr().out)
     assert set(trim) == {"page", "L", "B", "R", "U"} and trim["page"] == 1
 
 
-def test_crop_writes_latex_and_sheet(centrale, capsys, tmp_path):
+def test_crop_as_latex_with_a_sheet(centrale, capsys, tmp_path):
     sheet = tmp_path / "sheet.png"
-    assert main(["crop", str(centrale.path), "--part", "I.C", "--sheet", str(sheet)]) == 0
-    assert capsys.readouterr().out.startswith("\\includetoolargegraphics[page=2")
+    assert main(["crop", str(centrale.path), "--part", "I.C", "--latex", "--sheet", str(sheet)]) == 0
+    assert capsys.readouterr().out.startswith("\\includegraphics[page=2")
     assert sheet.is_file()
+
+
+def test_crop_with_a_template_of_ones_own(centrale, capsys):
+    template = "\\mine{{{file}}}{{{page}}}{{{trim}}}"
+    assert main(["crop", str(centrale.path), "--pages", "1-2", "--template", template, "--file", "s"]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert [line[: len("\\mine{s}{1}")] for line in lines] == ["\\mine{s}{1}", "\\mine{s}{2}"]
 
 
 def test_selection_error_exits_with_one(centrale, capsys):

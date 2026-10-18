@@ -2,8 +2,12 @@
 
 Read exam statements in PDF the way a teacher reads them: find their **headings** and
 their **questions**, and **crop** any part of them — a section, a range of questions,
-some pages — into slices that leave out headers, footers and line numbers, ready to be
-pasted into a new assignment with `\includegraphics`.
+some pages — into slices that leave out headers, footers and line numbers.
+
+A crop is a **page** and a **trim**: what to cut from each edge, left, bottom, right,
+top, in cm — the order of the `trim` key of graphicx. That is all the package outputs;
+how it is written is yours to choose: a table, JSON, `\includegraphics` lines, or the
+command of your own class.
 
 *Énoncé* is French for the statement of an exam problem. The package was written for
 French competitive exams (CPGE *concours*: Polytechnique, Centrale, Mines, CCINP…) and
@@ -15,13 +19,13 @@ typography and repetition, and on any PDF with text.
 from enoncepdf import Statement
 
 with Statement("subject.pdf") as statement:
-    crops = statement.crop("Partie Physique", with_heading=False)
-    print(statement.latex(crops))
+    for crop in statement.crop("Partie Physique", with_heading=False):
+        print(crop.page, crop.trim_cm)
 ```
 
 ```text
-\includetoolargegraphics[page=3, trim=1.41cm 2.43cm 1.62cm 4.97cm, clip]{subject}
-\includetoolargegraphics[page=4, trim=1.41cm 2.43cm 1.62cm 2.11cm, clip]{subject}
+3 (1.41, 2.43, 1.62, 4.97)
+4 (1.41, 2.43, 1.62, 2.11)
 …
 ```
 
@@ -50,8 +54,9 @@ with Statement("subject.pdf") as statement:
 - **Crops.** Name an extract as you read it — a heading number, a piece of a heading,
   a range of questions, pages, blocks — and get one crop per page, tightened on the
   ink, all of the same width so that stacked slices keep one scale.
-- **Output.** `\includetoolargegraphics` lines, the `trim` values in cm for any other
-  tool, JSON, and contact sheets (PNG) to check crops at a glance.
+- **Output.** The page and the trim of each crop, as a table, JSON, or lines written
+  with any template (`\includegraphics` by default, your own command otherwise), and
+  contact sheets (PNG) to check crops at a glance.
 - **Questions anywhere.** `locate` finds the questions of any list of lines — a whole
   page, a crop, a model answer — from their numbers alone, keeping the longest
   increasing run so that section numbers and quantities (« Q3 désigne la charge… »)
@@ -82,13 +87,12 @@ enoncepdf --help            # or: python -m enoncepdf --help
 | Command | What it gives |
 | --- | --- |
 | `structure subject.pdf` | headings with their levels, questions, margins left out |
-| `crop subject.pdf …` | one `\includetoolargegraphics` line per cropped page |
-| `trims subject.pdf …` | the trim of each page, L B R U in cm (`--json` for scripts) |
+| `crop subject.pdf …` | the page and the trim of each cropped page, L B R U in cm |
 | `blocks subject.pdf 5` | the bands of ink of page 5; `--from 2 --to 5` crops them |
 | `sheet subject.pdf` | the pages as thumbnails; `--pages 3-8` for those only |
 | `numbering subject.pdf` | the numbering patterns (parts, subparts, questions…) |
 
-`crop` and `trims` take the same selections, one at a time:
+`crop` takes one selection at a time:
 
 | Option | Extract |
 | --- | --- |
@@ -99,10 +103,10 @@ enoncepdf --help            # or: python -m enoncepdf --help
 | `--questions 1-10`, `--questions Q1-Q10` | from question 1 to whatever follows question 10 |
 | `--pages 3-9` | the body of whole pages |
 
-### Trims of questions 1 to 10
+### Questions 1 to 10
 
 ```bash
-enoncepdf trims subject.pdf --questions Q1-10
+enoncepdf crop subject.pdf --questions Q1-10
 ```
 
 ```text
@@ -115,16 +119,36 @@ Each value is the margin **removed** from that edge of the page, in the order of
 `trim` key of graphicx: left, bottom, right, top. On page 2 the kept band runs from
 26.25 cm below the top to 1.72 cm above the bottom — question 1, at the bottom of the
 page. Headers and footers are always outside the kept area; the last crop stops before
-question 11 or the heading that follows question 10. These are exactly the numbers of
-the `trim=` that `crop` writes.
+question 11 or the heading that follows question 10.
+
+### Writing the crops
+
+The same numbers, three other ways:
 
 ```bash
-enoncepdf trims subject.pdf --questions Q1-10 --json
+enoncepdf crop subject.pdf --questions Q1-10 --json
+enoncepdf crop subject.pdf --questions Q1-10 --latex
+enoncepdf crop subject.pdf --questions Q1-10 --template '\myinclude[{page}]{{{trim}}}{{{file}}}'
 ```
 
-```json
-[{"page": 2, "L": 1.23, "B": 1.72, "R": 1.88, "U": 26.25}]
+```text
+[{"page": 2, "L": 1.23, "B": 1.72, "R": 1.88, "U": 26.25}, …]
+\includegraphics[page=2, trim=1.23cm 1.72cm 1.88cm 26.25cm, clip]{subject}
+\myinclude[2]{1.23cm 1.72cm 1.88cm 26.25cm}{subject}
 ```
+
+`--template` takes a Python format string, so literal braces are doubled. Its fields:
+
+| Field | Value |
+| --- | --- |
+| `{page}` | the page, from 1 |
+| `{left}`, `{bottom}`, `{right}`, `{top}` | the trim of each edge, in cm, rounded to 0.01 |
+| `{trim}` | the four of them as graphicx reads them: `1.23cm 1.72cm 1.88cm 26.25cm` |
+| `{width}`, `{height}` | the size of the kept area, in cm — to choose a scale, say |
+| `{file}` | `--file`, or the name of the PDF without `.pdf` |
+
+Numeric fields take a format spec: `{left:.1f}`. `--latex` is the template
+`\includegraphics[page={page}, trim={trim}, clip]{{{file}}}`.
 
 To check before including anything:
 
@@ -144,7 +168,8 @@ with Statement("subject.pdf") as statement:
     crops = statement.crop(questions=(1, 10))
     for crop in crops:
         print(crop.page, crop.trim_cm)        # (left, bottom, right, top) in cm
-    print(statement.latex(crops))             # the \includetoolargegraphics lines
+    print(statement.format(crops))            # \includegraphics lines
+    print(statement.format(crops, r"\myinclude[{page}]{{{trim}}}{{{file}}}"))
     statement.contact_sheet(crops).save("crops.png")
 
     try:
@@ -201,10 +226,15 @@ in each part, each question carries its part (`q.part == "II"`).
 
 ## Statements compiled from crops
 
-An assignment built with the crops above is a LaTeX file that includes pages of
-papers. `CompiledStatement` finds its questions *in the papers* — where their text
-is — and places them in the compiled PDF, problem by problem (each `\section` opens a
-problem):
+The crops above end up in a new assignment: a LaTeX file that includes pages of past
+papers, trimmed. Once it is compiled, where are its questions? Its PDF does not say
+reliably — a trimmed page keeps the text the trim hides — and its source holds no
+question at all, only inclusions. `CompiledStatement` answers it: it reads the source
+for the inclusions, finds each included page from the log, reads the questions in the
+visible part of that page, and places them in the compiled PDF through SyncTeX,
+problem by problem (each `\section` opens a problem). A program that shows the
+statement next to students' answers, or that links a marking scheme to the questions,
+needs exactly that.
 
 ```python
 from enoncepdf import CompiledStatement
@@ -214,9 +244,11 @@ for found in CompiledStatement("DS2.tex").questions():
 ```
 
 It needs the source, the PDF, the SyncTeX file (`-synctex=1`) and the log, all next to
-the source unless given. Included pages are found from the log, which says where LaTeX
-took them; their visible part from the `trim` of each inclusion; their place from the
-SyncTeX boxes. Text typed in the source itself is read from the compiled PDF.
+the source unless given. The inclusions read are `\includegraphics` and `\includepdf`;
+a class that wraps them in a command of its own names it:
+`CompiledStatement("DS2.tex", commands=(*INCLUSION_COMMANDS, "myinclude"))`, the
+command taking graphicx's options (`page`, `trim`, `scale`) and the file. Text typed in
+the source itself is read from the compiled PDF.
 
 ## How it works
 

@@ -3,8 +3,9 @@
     python examples/crop_part.py subject.pdf "Partie Physique"
     python examples/crop_part.py subject.pdf II --questions 1-5
 
-Prints the \\includetoolargegraphics lines, the trims in cm for any other tool, and
-writes a contact sheet of the crops next to the PDF, to check them at a glance.
+Prints the page and the trim of each crop, in cm, then the same as \\includegraphics
+lines, and writes a contact sheet of the crops next to the PDF, to check them at a
+glance.
 """
 
 import argparse
@@ -34,10 +35,10 @@ def main() -> None:
             raise SystemExit(str(error)) from error
 
         print(f"{heading.label} {heading.text} — level {heading.level}, page {heading.page}")
-        print(statement.latex(crops))
         for crop in crops:
             left, bottom, right, top = crop.trim_cm
             print(f"page {crop.page}: L={left} B={bottom} R={right} U={top} (cm)")
+        print(statement.format(crops))
         sheet = args.pdf.with_name(f"{args.pdf.stem}-crops.png")
         statement.contact_sheet(crops).save(sheet)
         print(f"contact sheet: {sheet}")

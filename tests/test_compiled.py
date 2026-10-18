@@ -13,7 +13,7 @@ import pytest
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen.canvas import Canvas
 
-from enoncepdf.compiled import CompiledStatement, inclusions, synctex_boxes
+from enoncepdf.compiled import INCLUSION_COMMANDS, CompiledStatement, inclusions, synctex_boxes
 
 pytest.importorskip("latexdetok")
 
@@ -33,6 +33,8 @@ SOURCE = (
     "4) Une question tapée par LaTeX.\n"
     "\\end{document}\n"
 )
+# The statement wraps graphicx in a command of its own, as many teachers' classes do.
+COMMANDS = (*INCLUSION_COMMANDS, "includetoolargegraphics")
 # The page of the paper, trimmed by trim: what it prints, at the height of its baseline.
 PAPER = [
     (800, "9) Une question cachée par le rognage du haut."),
@@ -129,7 +131,7 @@ def write_statement(directory: Path, name: str = "DS9") -> CompiledStatement:
         f"<./{name}/paper.pdf, id=1, 597.5pt x 845.0pt>\n<use ./{name}/paper.pdf>\n",
         encoding="utf-8",
     )
-    return CompiledStatement(tex)
+    return CompiledStatement(tex, commands=COMMANDS)
 
 
 @pytest.fixture
@@ -173,18 +175,28 @@ def test_a_copied_source_reads_with_its_original_directory(statement, tmp_path):
         copies / statement.synctex.name,
         copies / statement.log.name,
         directory=statement.tex.parent,
+        commands=COMMANDS,
     )
     assert copy.questions() == statement.questions()
 
 
 def test_without_synctex_no_question(statement):
     statement.synctex.unlink()
-    assert CompiledStatement(statement.tex).questions() == []
+    assert CompiledStatement(statement.tex, commands=COMMANDS).questions() == []
+
+
+def test_a_command_of_ones_own_is_read_only_when_named(statement):
+    """Unnamed, the inclusions are unknown: none of the papers' questions is found, only
+    the text of the compiled PDF is read."""
+    found = CompiledStatement(statement.tex).questions()
+    assert not any(q.question.part for q in found)
+    assert (2, "4") in [(q.problem, q.question.ref) for q in found]
 
 
 class TestSource:
     def test_commented_inclusion_skipped_and_trim_in_bp(self):
-        first, second = inclusions(SOURCE)
+        assert inclusions(SOURCE) == []
+        first, second = inclusions(SOURCE, COMMANDS)
         assert (first.problem, first.line, first.file, first.page) == (1, 4, "paper", 1)
         assert first.trim == pytest.approx((0, 3 * CM, 0, 2 * CM))
         assert (first.scale, first.end) == (0.9, 8)

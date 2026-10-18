@@ -125,14 +125,25 @@ A slice of a page, described by the box it keeps.
 | --- | --- |
 | `raw_trim_cm` | what to cut from each edge, in cm, unrounded: (left, bottom, right, top) |
 | `trim_cm` | the same, rounded to 0.01 cm and never negative — the numbers written everywhere |
-| `trim_option` | `"trim=1.23cm 1.72cm 1.88cm 26.25cm"` |
-| `latex(file, text_height=666.8)` | `\includetoolargegraphics[page=…, trim=…, clip]{file}` |
+| `width_cm`, `height_cm` | the size of the kept box, in cm |
+| `format(template=GRAPHICX_TEMPLATE, file="")` | the crop written with a `str.format` template |
 
-`latex` adds `scale=…` when the kept box is taller than `text_height` (bp): the scale
-that makes it fit, with a 3 % margin, rounded down to 0.01 —
-`\includetoolargegraphics` bounds the width only, and a slice taller than the page
-makes the pagination loop. Use `\includegraphics` instead by replacing the command
-name: the options are those of graphicx.
+**The page and the trim are the output of the package.** Everything else is a way of
+writing them, and `format` leaves that to the caller. Its fields:
+
+| Field | Value |
+| --- | --- |
+| `{page}` | the page, from 1 |
+| `{left}`, `{bottom}`, `{right}`, `{top}` | `trim_cm`, as floats |
+| `{trim}` | the four as graphicx reads them: `1.23cm 1.72cm 1.88cm 26.25cm` |
+| `{width}`, `{height}` | `width_cm`, `height_cm`, rounded to 0.01 |
+| `{file}` | `file` |
+
+`GRAPHICX_TEMPLATE` is `\includegraphics[page={page}, trim={trim}, clip]{{{file}}}`:
+braces meant literally are doubled. A command of one's own is one template away —
+`r"\myinclude[{page}]{{{trim}}}{{{file}}}"` —, and what a template cannot express (a
+scale chosen when the slice is taller than the page, say) is a few lines over
+`trim_cm` and `height_cm`.
 
 ## 4. Reading a PDF: `PdfDocument`
 
@@ -408,7 +419,7 @@ file.
 | `heading(selection, within=None)` | `Cropper.find_heading` |
 | `crop(part=None, *, with_heading=True, intro=False, within=None, questions=None, pages=None)` | the crops of one selection, or of the whole document; `ValueError` for several selections |
 | `crop_blocks(page, first, last=None, gap=6)` | `Cropper.blocks` |
-| `latex(crops, file=None)` | one `\includetoolargegraphics` line per crop, on `file` or the PDF's stem |
+| `format(crops, template=GRAPHICX_TEMPLATE, file=None)` | one line per crop, `{file}` being `file` or the PDF's stem |
 | `under(heading)` | `(headings, questions)` strictly inside a part, the whole document for None |
 | `numbering(within=None)` | the `NumberingProfile` of the document or of one part |
 | `levels(within=None)` | `NumberingAnalysis.levels` of the document or of one part |
@@ -478,10 +489,19 @@ returns the question with that number if there is exactly one.
 ## 14. Compiled statements: `enoncepdf.compiled`
 
 ```python
-CompiledStatement(tex, pdf=None, synctex=None, log=None, directory=None)
+CompiledStatement(tex, pdf=None, synctex=None, log=None, directory=None, commands=INCLUSION_COMMANDS)
 ```
 
-A LaTeX statement built from pages of papers. `pdf`, `synctex` (`.synctex.gz` or
+A LaTeX statement built from pages of papers — what one writes with the crops of
+section 10 — whose questions are wanted where they fall in the compiled PDF: to show
+the statement beside a student's answer, to link a marking scheme to it. The PDF alone
+cannot say (a trimmed page keeps the text its trim hides), nor can the source (it holds
+inclusions, not questions).
+
+`commands` are the inclusion commands read, without backslash: `INCLUSION_COMMANDS`,
+`("includegraphics", "includepdf")`, by default. A class that wraps them in a command
+of its own adds it — `commands=(*INCLUSION_COMMANDS, "myinclude")` —, the command
+taking graphicx's optional argument (`page`, `trim`, `scale`) and then the file. `pdf`, `synctex` (`.synctex.gz` or
 `.synctex`) and `log` default to the source's name; `directory` is the folder of the
 compilation, the source's by default — pass it when the source is a copy, so that
 inclusions and the file SyncTeX names are still found.
@@ -491,7 +511,7 @@ the `\section` (unstarred) the question falls under, the `LocatedQuestion` place
 the compiled PDF, and the top of its line as a fraction of the page height. It returns
 an empty list without source, PDF or SyncTeX, or without latexdetok (Python < 3.13).
 
-`inclusions()` / `inclusions(source)` list the included pages:
+`inclusions()` / `inclusions(source, commands=INCLUSION_COMMANDS)` list the included pages:
 `Inclusion(problem, line, file, page, trim, end, scale)`, `trim` in bp in the order of
 graphicx. Commented-out inclusions are skipped; `\includepdf[pages=…]` gives one
 inclusion per page; a `\section` inside `pagecommand` opens the problem of its pages.
@@ -529,15 +549,20 @@ and prints the message of a `SelectionError` on stderr.
 | Command | Arguments |
 | --- | --- |
 | `structure PDF` | — |
-| `crop PDF [selection] [--sheet PNG]` | prints the LaTeX lines; writes a contact sheet |
-| `trims PDF [selection] [--json]` | `page N L=…cm B=…cm R=…cm U=…cm`, or a JSON list |
-| `blocks PDF PAGE [--from N --to M] [--gap BP]` | lists the blocks, or crops blocks N to M |
+| `crop PDF [selection] [output] [--sheet PNG]` | the page and trim of each crop; writes a contact sheet |
+| `blocks PDF PAGE [--gap BP] [--from N --to M [output]]` | lists the blocks, or crops blocks N to M |
 | `sheet PDF [--pages A-B] [-o PNG]` | writes a sheet of pages (to the temp folder by default) and prints its path |
 | `numbering PDF [--within PART]` | the profile, one field per line |
 
 A *selection* is one of `--part TEXT` (with `--without-heading`, `--intro`,
 `--within TEXT`), `--questions RANGE`, `--pages RANGE`. A range reads « 1-10 »,
 « Q1-10 », « Q1-Q10 », « p3 », in either order; `enoncepdf.cli.parse_range` parses it.
+
+The *output* is, by default, one line per crop, `page N L=…cm B=…cm R=…cm U=…cm`; or
+`--json`, a list of `{"page", "L", "B", "R", "U"}` in cm; or `--latex`, lines written
+with `GRAPHICX_TEMPLATE`; or `--template TEMPLATE`, lines written with a template of
+one's own (section 3). `--file NAME` sets `{file}`, the PDF's name without `.pdf` by
+default.
 
 ## 17. Threads and resources
 

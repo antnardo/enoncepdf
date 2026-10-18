@@ -1,12 +1,12 @@
 """Command line: ``enoncepdf <command> <pdf> …`` (or ``python -m enoncepdf``).
 
 structure  subject.pdf                                headings, questions, margins found
-crop       subject.pdf --part "Partie Physique" --without-heading
+crop       subject.pdf --part "Partie Physique" --without-heading   page and trim (L B R U, cm)
 crop       subject.pdf --part 2.1 --within "Partie Physique"
 crop       subject.pdf --part "NASA" --without-heading --intro    the introduction alone
-crop       subject.pdf --questions 1-17 --sheet crops.png
-trims      subject.pdf --questions Q1-10                 trim of each page, in cm
-trims      subject.pdf --part II --json
+crop       subject.pdf --questions 1-17 --json --sheet crops.png
+crop       subject.pdf --part II --latex                  \\includegraphics lines
+crop       subject.pdf --part II --template "\\mycommand[{page}]{{{trim}}}{{{file}}}"
 blocks     subject.pdf 5 [--from 2 --to 5] [--gap 2]
 sheet      subject.pdf [--pages 3-8] [-o sheet.png]
 numbering  subject.pdf [--within "Partie Physique"]
@@ -20,10 +20,15 @@ import tempfile
 from pathlib import Path
 
 from enoncepdf.cropping import SelectionError
-from enoncepdf.models import Crop
+from enoncepdf.models import GRAPHICX_TEMPLATE, Crop
 from enoncepdf.statement import Statement
 
 __all__ = ["main", "parse_range"]
+
+_OUTPUT_HELP = (
+    "write each crop with this str.format template; fields {page}, {left}, {bottom}, {right},"
+    " {top} (cm), {trim} (« Lcm Bcm Rcm Ucm »), {width}, {height} (cm), {file}"
+)
 
 # « 1-10 », « Q1-10 », « Q1-Q10 », « p3 »: a range as one types it
 _RANGE = re.compile(r"[qQpP]?\s*(\d+)(?:\s*-\s*[qQpP]?\s*(\d+))?")
@@ -39,7 +44,7 @@ def parse_range(text: str) -> tuple[int, int]:
 
 
 def _selection_options(parser: argparse.ArgumentParser) -> None:
-    """The ways of selecting an extract, shared by ``crop`` and ``trims``."""
+    """The ways of selecting an extract."""
     parser.add_argument("pdf", type=Path)
     parser.add_argument("--part", help="a heading number or a piece of its text")
     parser.add_argument("--without-heading", action="store_true", help="leave the heading line out")
@@ -80,33 +85,40 @@ def _structure(statement: Statement, _: argparse.Namespace) -> None:
     print("\nMargins left out: " + (", ".join(f"{n} × {k}" for k, n in count.items()) or "none"))
 
 
+def _output_options(parser: argparse.ArgumentParser) -> None:
+    """How crops are written, shared by ``crop`` and ``blocks``."""
+    output = parser.add_mutually_exclusive_group()
+    output.add_argument("--json", action="store_true", help="a list of {page, L, B, R, U}, in cm")
+    output.add_argument("--latex", action="store_true", help="one \\includegraphics line per crop")
+    output.add_argument("--template", help=_OUTPUT_HELP)
+    parser.add_argument("--file", help="what {file} stands for; the PDF's name without .pdf by default")
+
+
+def _write(statement: Statement, crops: list[Crop], args: argparse.Namespace) -> None:
+    """The page and the trim of each crop — left, bottom, right, top (LBRU) in cm, cut from
+    the edges of the page, the order of graphicx's ``trim`` — as a table, JSON, or lines
+    written with a template."""
+    if args.json:
+        print(json.dumps([{"page": c.page, **dict(zip("LBRU", c.trim_cm, strict=True))} for c in crops]))
+    elif args.latex or args.template:
+        print(statement.format(crops, args.template or GRAPHICX_TEMPLATE, args.file))
+    else:
+        for c in crops:
+            left, bottom, right, top = c.trim_cm
+            print(f"page {c.page:<3} L={left:.2f}cm B={bottom:.2f}cm R={right:.2f}cm U={top:.2f}cm")
+
+
 def _crop(statement: Statement, args: argparse.Namespace) -> None:
     crops = _crops(statement, args)
-    print(statement.latex(crops))
+    _write(statement, crops, args)
     if args.sheet:
         statement.contact_sheet(crops).save(args.sheet)
         print(f"contact sheet: {args.sheet}", file=sys.stderr)
 
 
-def _trims(statement: Statement, args: argparse.Namespace) -> None:
-    """The trim of each page, without LaTeX: for whoever crops the PDF with another tool.
-
-    The order is that of ``trim`` — left, bottom, right, top (LBRU) — in cm, measured
-    from the edges of the page; headers, footers and line numbers are already outside
-    the kept area.
-    """
-    crops = _crops(statement, args)
-    if args.json:
-        print(json.dumps([{"page": c.page, **dict(zip("LBRU", c.trim_cm, strict=True))} for c in crops]))
-        return
-    for c in crops:
-        left, bottom, right, top = c.trim_cm
-        print(f"page {c.page:<3} L={left:.2f}cm B={bottom:.2f}cm R={right:.2f}cm U={top:.2f}cm")
-
-
 def _blocks(statement: Statement, args: argparse.Namespace) -> None:
     if args.first:
-        print(statement.latex(statement.crop_blocks(args.page, args.first, args.last, args.gap)))
+        _write(statement, statement.crop_blocks(args.page, args.first, args.last, args.gap), args)
         return
     width, height = statement.document.size(args.page)
     blocks = statement.blocks(args.page, args.gap)
@@ -143,13 +155,10 @@ def main(argv: list[str] | None = None) -> int:
     sub = commands.add_parser("structure", help="headings, questions and margins found")
     sub.add_argument("pdf", type=Path)
 
-    sub = commands.add_parser("crop", help="\\includetoolargegraphics lines")
+    sub = commands.add_parser("crop", help="page and trim of each cropped page: L B R U in cm")
     _selection_options(sub)
+    _output_options(sub)
     sub.add_argument("--sheet", type=Path, help="also write the contact sheet of the crops")
-
-    sub = commands.add_parser("trims", help="trim of each cropped page: L B R U in cm")
-    _selection_options(sub)
-    sub.add_argument("--json", action="store_true", help="a list of {page, L, B, R, U}")
 
     sub = commands.add_parser("blocks", help="blocks of a page, and crops of blocks")
     sub.add_argument("pdf", type=Path)
@@ -159,6 +168,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_argument(
         "--gap", type=int, default=6, help="white space between blocks, in bp; 2: one line per block"
     )
+    _output_options(sub)
 
     sub = commands.add_parser("sheet", help="pages as thumbnails")
     sub.add_argument("pdf", type=Path)
@@ -173,7 +183,6 @@ def main(argv: list[str] | None = None) -> int:
     actions = {
         "structure": _structure,
         "crop": _crop,
-        "trims": _trims,
         "blocks": _blocks,
         "sheet": _sheet,
         "numbering": _numbering,
