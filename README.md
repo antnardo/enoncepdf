@@ -56,10 +56,16 @@ of your own class).
    comes from the shape of their number (`I`, `I.A`, `I.A.1` or `1`, `1.1`, `1.1.1`).
    Questions start with their number at the size of the running text, and follow one
    another.
-4. **Crop.** A selection — a part, a range of questions, pages — becomes two positions
-   in the flow of the document. On each page in between, the body is kept, then
-   tightened on the ink. All the crops of one selection have the same width, so that
-   stacked slices keep one scale.
+4. **Find the frame.** The pages of a typeset paper share one text block: its left and
+   right edges are those most pages reach, and its margins are often round numbers
+   (2 cm, 2.5 cm), to which they are rounded when the ink allows. A page whose ink
+   goes beyond the frame — a figure wider than the text — gets its own frame on the
+   sides it overflows. A scan, whose sheet moves from page to page, has one frame per
+   page.
+5. **Crop.** A selection — a part, a range of questions, pages — becomes two positions
+   in the flow of the document. On each page in between, the body is kept inside the
+   frame, then tightened on the ink from top and bottom. All the crops of a paper have
+   the width of its frame, so that stacked slices keep one scale.
 
 Everything is read through pdfium (`pypdfium2`); the package is MIT-licensed, with no
 AGPL dependency.
@@ -91,6 +97,7 @@ enoncepdf crop subject.pdf --questions Q1-10 --sheet crops.png
 | `--intro` | only the text that opens the part, up to its first heading |
 | `--questions 1-10`, `--questions Q1-Q10` | from question 1 to whatever follows question 10 |
 | `--pages 3-9` | the body of whole pages |
+| `--frame 2,2.5,2,3` | common margins of one's own, in cm: left, top, right, bottom |
 
 and prints, by default, one line per page:
 
@@ -155,9 +162,22 @@ with Statement("subject.pdf") as statement:
     statement.crop("2.1", within="Partie Physique")
 ```
 
+The frame found on the pages, and its exceptions, are plain data in cm, to show, edit
+and give back:
+
+```python
+with Statement("subject.pdf") as statement:
+    framing = statement.framing
+    print(framing.common)                      # Frame(left=2.0, top=2.5, right=2.0, bottom=3.0)
+    print(framing.pages)                       # {7: Frame(left=1.0, top=None, right=1.0, bottom=None)}
+    mine = framing.with_common(Frame(2.0, 2.0, 2.0, 2.0))
+    statement.crop("II", framing=mine)         # crops inside these margins
+    Framing.of_dict(mine.as_dict()) == mine    # JSON and back
+```
+
 `Statement.crop` takes one selection — a part (`"II"`, `"Partie Physique"`, a piece of
 a heading, a `Heading`), `questions=(first, last)` or `pages=(first, last)`, or nothing
-for the whole document — with `with_heading`, `intro` and `within`. A selection that
+for the whole document — with `with_heading`, `intro`, `within` and `framing`. A selection that
 names nothing, or several headings, raises `SelectionError`, whose message lists what
 was found. All coordinates are in bp (1/72 in) from the top left of the page, pages
 numbered from 1.

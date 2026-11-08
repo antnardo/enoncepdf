@@ -6,13 +6,15 @@ slice that ends mid-page drags no white space along, an almost empty page gives
 nothing. A part, a range of questions, whole pages or blocks are only ways of naming
 the two positions.
 
-The width kept is the same for all the crops of one call: the extent of the ink over
-all the pages crossed. Stacked, the slices keep the same scale and the same alignment,
-and a figure wider than the text is never cut.
+The width kept is that of the frame the pages share (``enoncepdf.framing``): stacked,
+the slices keep the same scale and the same alignment, whatever the extract. A page
+whose ink overflows the frame — a figure wider than the text — has its own frame, so
+that nothing is cut.
 """
 
 import numpy as np
 
+from enoncepdf.framing import Framing
 from enoncepdf.layout import LayoutAnalysis
 from enoncepdf.models import Box, Crop, Heading, Position
 from enoncepdf.structure import StructureAnalysis, normalize
@@ -44,6 +46,7 @@ class Cropper:
         with_heading: bool = True,
         within: str | Heading | None = None,
         intro: bool = False,
+        framing: Framing | None = None,
     ) -> list[Crop]:
         """A part, up to the next heading of the same level or higher.
 
@@ -61,9 +64,11 @@ class Cropper:
             if with_heading
             else Position(heading.page, self._white_below(heading.page, heading.box.y1))
         )
-        return self.between(start, self._next(heading) if intro else self._end_of(heading))
+        return self.between(start, self._next(heading) if intro else self._end_of(heading), framing)
 
-    def questions(self, first: int, last: int, within: str | Heading | None = None) -> list[Crop]:
+    def questions(
+        self, first: int, last: int, within: str | Heading | None = None, framing: Framing | None = None
+    ) -> list[Crop]:
         """Questions ``first`` to ``last`` included, up to whatever follows the last one."""
         span_start, span_end = self.span(within)
         inside = [
@@ -86,63 +91,52 @@ class Cropper:
         return self.between(
             Position(q0.page, self._white_above(q0.page, q0.box.y0)),
             Position(end[0], self._white_above(end[0], end[1])) if end else None,
+            framing,
         )
 
-    def pages(self, first: int, last: int | None = None) -> list[Crop]:
+    def pages(self, first: int, last: int | None = None, framing: Framing | None = None) -> list[Crop]:
         """The body of whole pages."""
         last = last or first
         end = Position(last + 1, 0) if last < self.document.page_count else None
-        return self.between(Position(first, 0), end)
+        return self.between(Position(first, 0), end, framing)
 
-    def blocks(self, page: int, first: int, last: int | None = None, gap: int = 6) -> list[Crop]:
+    def blocks(
+        self, page: int, first: int, last: int | None = None, gap: int = 6, framing: Framing | None = None
+    ) -> list[Crop]:
         """Blocks of a page, numbered from 1 as in ``LayoutAnalysis.blocks``."""
         found = self.layout.blocks(page, gap)
         last = last or first
         if not 1 <= first <= last <= len(found):
             raise SelectionError(f"blocks {first} to {last}: page {page} has {len(found)}")
         kept = found[first - 1 : last]
-        return self.between(Position(page, kept[0].box.y0 - 0.5), Position(page, kept[-1].box.y1 + 0.5))
+        return self.between(
+            Position(page, kept[0].box.y0 - 0.5), Position(page, kept[-1].box.y1 + 0.5), framing
+        )
 
     # -- The one operation ----------------------------------------------------------------------
 
-    def between(self, start: Position, end: Position | None) -> list[Crop]:
+    def between(self, start: Position, end: Position | None, framing: Framing | None = None) -> list[Crop]:
         """The content of the flow from ``start`` to ``end`` (the end of the document if
-        None), one crop per page."""
+        None), one crop per page, inside the frame of each page (``framing``, or the one
+        the document's pages share)."""
         last = end.page if end else self.document.page_count
-        slices: list[tuple[int, int, int, np.ndarray]] = []
+        crops = []
         for page in range(start.page, min(last, self.document.page_count) + 1):
-            body = self.layout.body(page)
+            body = self.layout.body(page, framing)
+            # the margin never spills beyond the positions asked for: it would take back the
+            # descender of the heading just left out, or the top of the next one
             top = max(start.y if page == start.page else body.y0, body.y0)
             bottom = min(end.y if end and page == end.page else body.y1, body.y1)
             if bottom - top < 2:
                 continue
-            mask = self.layout.body_ink(page, vertical_only=True)
+            mask = self.layout.body_ink(page, framing)
             i0, i1 = max(int(top), 0), int(np.ceil(bottom))
             rows = np.where(mask[i0:i1].any(axis=1))[0]
             if rows.size == 0:
                 continue
             y0, y1 = i0 + int(rows[0]), i0 + int(rows[-1]) + 1
-            columns = np.where(mask[y0:y1].any(axis=0))[0]
-            slices.append((page, y0, y1, columns))
-
-        if not slices:
-            return []
-        x0 = min(int(c[0]) for *_, c in slices)
-        x1 = max(int(c[-1]) + 1 for *_, c in slices)
-        crops = []
-        for page, y0, y1, _ in slices:
             width, height = self.document.size(page)
-            body = self.layout.body(page)
-            # the margin never spills beyond the positions asked for: it would take back the
-            # descender of the heading just left out, or the top of the next one
-            top = start.y if page == start.page else body.y0
-            bottom = end.y if end and page == end.page else body.y1
-            kept = Box(
-                max(x0 - self.margin, 0),
-                max(y0 - self.margin, body.y0, top),
-                min(x1 + self.margin, width),
-                min(y1 + self.margin, body.y1, bottom),
-            )
+            kept = Box(body.x0, max(y0 - self.margin, top), body.x1, min(y1 + self.margin, bottom))
             crops.append(Crop(page, kept, width, height))
         return crops
 

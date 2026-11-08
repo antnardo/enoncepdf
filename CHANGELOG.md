@@ -3,6 +3,30 @@
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+The pages of a paper share one frame: the crops take it.
+
+### Added
+
+- `Frame`, `Framing`, `estimate_framing`, `round_margin` (module `framing`): the margins
+  the pages share, in cm, rounded to the half-centimetre when the ink allows (checked at
+  576 dpi), with an exception for each page whose ink overflows them, and one frame per
+  page for a scan.
+- `Statement.framing`, `LayoutAnalysis.framing()` and `LayoutAnalysis.free_ink()`.
+- `framing=` on `Statement.crop`, `Statement.crop_blocks` and every `Cropper` selection:
+  crops inside a frame given by hand.
+- On the command line, `structure` prints the frame and its exceptions; `crop` takes
+  `--frame L,T,R,B`.
+
+### Changed
+
+- The left and right edges of a crop are those of the frame of its page, no longer the
+  extent of the ink over the pages of one call: all the crops of a paper share one
+  width, a stray mark no longer widens them, line numbers no longer creep in.
+- `LayoutAnalysis.body` and `body_ink` take `framing=`; `body_ink` loses
+  `vertical_only`, which `free_ink` replaces.
+
 ## [0.2.0] — 2026-10-18
 
 The output of a crop is its page and its trim; how they are written is the caller's.

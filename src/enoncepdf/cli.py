@@ -6,6 +6,7 @@ crop       subject.pdf --part 2.1 --within "Partie Physique"
 crop       subject.pdf --part "NASA" --without-heading --intro    the introduction alone
 crop       subject.pdf --questions 1-17 --json --sheet crops.png
 crop       subject.pdf --part II --latex                  \\includegraphics lines
+crop       subject.pdf --pages 3-9 --frame 2,2.5,2,3      common margins given, in cm
 crop       subject.pdf --part II --template "\\mycommand[{page}]{{{trim}}}{{{file}}}"
 blocks     subject.pdf 5 [--from 2 --to 5] [--gap 2]
 sheet      subject.pdf [--pages 3-8] [-o sheet.png]
@@ -20,10 +21,11 @@ import tempfile
 from pathlib import Path
 
 from enoncepdf.cropping import SelectionError
+from enoncepdf.framing import Frame
 from enoncepdf.models import GRAPHICX_TEMPLATE, Crop
 from enoncepdf.statement import Statement
 
-__all__ = ["main", "parse_range"]
+__all__ = ["main", "parse_frame", "parse_range"]
 
 _OUTPUT_HELP = (
     "write each crop with this str.format template; fields {page}, {left}, {bottom}, {right},"
@@ -52,9 +54,13 @@ def _selection_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--within", help="enclosing part, to remove an ambiguity")
     parser.add_argument("--questions", type=parse_range, help="range, e.g. 1-17 or Q1-17")
     parser.add_argument("--pages", type=parse_range, help="range, e.g. 3-9")
+    parser.add_argument(
+        "--frame", type=parse_frame, help="common margins in cm, left,top,right,bottom (e.g. 2,2.5,2,3)"
+    )
 
 
 def _crops(statement: Statement, args: argparse.Namespace) -> list[Crop]:
+    framing = statement.framing.with_common(args.frame) if args.frame else None
     return statement.crop(
         args.part,
         with_heading=not args.without_heading,
@@ -62,6 +68,7 @@ def _crops(statement: Statement, args: argparse.Namespace) -> list[Crop]:
         within=args.within,
         questions=args.questions,
         pages=args.pages,
+        framing=framing,
     )
 
 
@@ -83,6 +90,24 @@ def _structure(statement: Statement, _: argparse.Namespace) -> None:
     for m in statement.margins:
         count[m.kind.value] = count.get(m.kind.value, 0) + 1
     print("\nMargins left out: " + (", ".join(f"{n} × {k}" for k, n in count.items()) or "none"))
+    framing = statement.framing
+    scan = " — a scan: every page framed alone" if framing.scanned else ""
+    print(f"\nFrame (cm, left top right bottom): {_frame_text(framing.common)}{scan}")
+    for page, frame in sorted(framing.pages.items()):
+        print(f"  p.{page:<3} {_frame_text(frame)}")
+
+
+def _frame_text(frame: Frame) -> str:
+    return " ".join("·" if v is None else f"{v:g}" for v in frame.as_list())
+
+
+def parse_frame(text: str) -> Frame:
+    """« 2,2.5,2,3 » or « 2 2.5 2 3 » → the four margins, in cm: left, top, right, bottom."""
+    try:
+        frame = Frame.of_list([float(v) for v in re.split(r"[,;\s]+", text.strip())])
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"unreadable frame: « {text} » (e.g. 2,2.5,2,3)") from None
+    return frame
 
 
 def _output_options(parser: argparse.ArgumentParser) -> None:

@@ -20,6 +20,7 @@ from PIL import Image
 
 from enoncepdf.cropping import Cropper
 from enoncepdf.document import PdfDocument
+from enoncepdf.framing import Framing
 from enoncepdf.layout import LayoutAnalysis
 from enoncepdf.models import GRAPHICX_TEMPLATE, Block, Crop, Heading, Margin, Question
 from enoncepdf.numbering import NumberingAnalysis, NumberingProfile
@@ -69,6 +70,11 @@ class Statement:
         return self.structure.questions()
 
     @property
+    def framing(self) -> Framing:
+        """The frame the pages share, in cm, and the pages that have their own."""
+        return self.layout.framing()
+
+    @property
     def margins(self) -> list[Margin]:
         return self.layout.margins()
 
@@ -88,24 +94,30 @@ class Statement:
         within: str | Heading | None = None,
         questions: tuple[int, int] | None = None,
         pages: tuple[int, int] | None = None,
+        framing: Framing | None = None,
     ) -> list[Crop]:
         """The crops of a part, a range of questions, pages — or the whole document.
 
         One selection at a time. Headers, footers and line numbers are never kept.
-        ``intro`` reduces a part to the text that opens it.
+        ``intro`` reduces a part to the text that opens it. ``framing`` replaces the frame
+        found on the pages — one edited by hand, say: crops stay inside it.
         """
         if sum(x is not None for x in (part, questions, pages)) > 1:
             raise ValueError("select a part, questions or pages, not several")
         if part is not None:
-            return self.cropper.part(part, with_heading=with_heading, within=within, intro=intro)
+            return self.cropper.part(
+                part, with_heading=with_heading, within=within, intro=intro, framing=framing
+            )
         if questions is not None:
-            return self.cropper.questions(*questions, within=within)
+            return self.cropper.questions(*questions, within=within, framing=framing)
         if pages is not None:
-            return self.cropper.pages(*pages)
-        return self.cropper.pages(1, self.document.page_count)
+            return self.cropper.pages(*pages, framing=framing)
+        return self.cropper.pages(1, self.document.page_count, framing=framing)
 
-    def crop_blocks(self, page: int, first: int, last: int | None = None, gap: int = 6) -> list[Crop]:
-        return self.cropper.blocks(page, first, last, gap)
+    def crop_blocks(
+        self, page: int, first: int, last: int | None = None, gap: int = 6, framing: Framing | None = None
+    ) -> list[Crop]:
+        return self.cropper.blocks(page, first, last, gap, framing)
 
     def format(self, crops: list[Crop], template: str = GRAPHICX_TEMPLATE, file: str | None = None) -> str:
         """One line per crop, written with ``template`` (see ``Crop.format``); ``{file}``

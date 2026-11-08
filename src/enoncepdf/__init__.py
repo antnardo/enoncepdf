@@ -16,6 +16,7 @@ from enoncepdf.compiled import (
 )
 from enoncepdf.cropping import Cropper, SelectionError
 from enoncepdf.document import PdfDocument
+from enoncepdf.framing import Frame, Framing, estimate_framing, round_margin
 from enoncepdf.layout import LayoutAnalysis
 from enoncepdf.models import (
     BP_PER_CM,
@@ -53,6 +54,8 @@ __all__ = [
     "ContactSheet",
     "Crop",
     "Cropper",
+    "Frame",
+    "Framing",
     "Heading",
     "Inclusion",
     "LayoutAnalysis",
@@ -75,6 +78,7 @@ __all__ = [
     "SyncTeXBox",
     "__version__",
     "comparable_ref",
+    "estimate_framing",
     "inclusions",
     "locate",
     "marks",
@@ -83,5 +87,6 @@ __all__ = [
     "pattern",
     "questions",
     "readable_text",
+    "round_margin",
     "synctex_boxes",
 ]

@@ -18,9 +18,9 @@ A rule or a logo repeated at the top, which is not text, is caught the same way 
 ink mask: a band of ink in the top or bottom band, at the same height on half the pages
 at least.
 
-The **body** of a page is what remains between header and footer. Its width is that of
-the whole document, so that the crops of one statement all have the same width, hence
-the same scale once stacked.
+The **body** of a page is what remains between header and footer, inside the frame the
+pages share (see ``enoncepdf.framing``): the crops of one statement all have the same
+width, hence the same scale once stacked, unless a page overflows the frame.
 """
 
 import re
@@ -30,6 +30,7 @@ from collections import defaultdict
 import numpy as np
 
 from enoncepdf.document import PdfDocument
+from enoncepdf.framing import Framing, estimate_framing
 from enoncepdf.models import Block, BlockKind, Box, Line, Margin, MarginKind
 
 __all__ = ["LayoutAnalysis"]
@@ -54,6 +55,7 @@ class LayoutAnalysis:
         self.document = document
         self._margins: list[Margin] | None = None
         self._text_span: tuple[float, float] | None = None
+        self._framing: Framing | None = None
 
     # -- Margins ------------------------------------------------------------------------------
 
@@ -147,26 +149,33 @@ class LayoutAnalysis:
                 rules.append(Margin(page, Box(0, y0, width, y1 + 1), kind, ""))
         return rules
 
-    # -- Body ---------------------------------------------------------------------------------
+    # -- Frame and body -------------------------------------------------------------------------
 
-    def body(self, page: int) -> Box:
-        """The area of the page between header and footer, across the document's text width."""
-        _, height = self.document.size(page)
-        top, bottom = 0.0, height
+    def framing(self) -> Framing:
+        """The frame the pages share, and its exceptions (see ``enoncepdf.framing``)."""
+        if self._framing is None:
+            self._framing = estimate_framing(self)
+        return self._framing
+
+    def body(self, page: int, framing: Framing | None = None) -> Box:
+        """The area of the page inside its frame, between header and footer."""
+        width, height = self.document.size(page)
+        frame = (framing or self.framing()).frame(page).box(width, height)
+        top, bottom = frame.y0, frame.y1
         for m in self.margins(page):
             if m.kind is MarginKind.HEADER:
                 top = max(top, m.box.y1 + 1)
             elif m.kind is MarginKind.FOOTER:
                 bottom = min(bottom, m.box.y0 - 1)
-        x0, x1 = self.text_span()
-        return Box(x0, top, x1, bottom)
+        return Box(frame.x0, top, frame.x1, max(bottom, top))
 
     def text_span(self) -> tuple[float, float]:
-        """The leftmost and rightmost abscissae of the body's ink, over the whole document."""
+        """The leftmost and rightmost abscissae of the ink outside the margins, over the
+        whole document: what the title of the subject is centred on."""
         if self._text_span is None:
             lefts, rights = [], []
             for page in range(1, self.document.page_count + 1):
-                columns = np.where(self.body_ink(page, vertical_only=True).any(axis=0))[0]
+                columns = np.where(self.free_ink(page).any(axis=0))[0]
                 if columns.size:
                     lefts.append(columns[0])
                     rights.append(columns[-1] + 1)
@@ -174,9 +183,9 @@ class LayoutAnalysis:
             self._text_span = (float(min(lefts)), float(max(rights))) if lefts else (0.0, width)
         return self._text_span
 
-    def body_ink(self, page: int, vertical_only: bool = False) -> np.ndarray:
-        """The ink mask of the page, margins erased and everything outside the body blank;
-        ``vertical_only`` keeps the full width."""
+    def free_ink(self, page: int) -> np.ndarray:
+        """The ink mask of the page, margins erased and the header and footer bands blank:
+        what the frame is measured on."""
         mask = self.document.ink(page).copy()
         for m in self.margins(page):
             b = m.box
@@ -193,10 +202,16 @@ class LayoutAnalysis:
                 bottom = min(bottom, int(m.box.y0 - 1))
         mask[:top] = 0
         mask[bottom:] = 0
-        if not vertical_only:
-            x0, x1 = self.text_span()
-            mask[:, : int(x0)] = 0
-            mask[:, int(np.ceil(x1)) :] = 0
+        return mask
+
+    def body_ink(self, page: int, framing: Framing | None = None) -> np.ndarray:
+        """The ink mask of the page, blank outside its body."""
+        mask = self.free_ink(page)
+        body = self.body(page, framing)
+        mask[: max(int(np.ceil(body.y0)), 0)] = 0
+        mask[int(body.y1) :] = 0
+        mask[:, : max(int(np.ceil(body.x0)), 0)] = 0
+        mask[:, int(body.x1) :] = 0
         return mask
 
     # -- Blocks -------------------------------------------------------------------------------

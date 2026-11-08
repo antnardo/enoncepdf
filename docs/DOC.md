@@ -55,7 +55,8 @@ from enoncepdf import Statement, PdfiumDocument, locate, CompiledStatement, Crop
 | `text` | `readable_text`: TeX accents recomposed, ligatures undone |
 | `document` | `PdfDocument`: lines glued by baseline, ink masks, renderings |
 | `reading` | `PdfiumDocument`: lines as pdfium breaks them, nothing held open |
-| `layout` | `LayoutAnalysis`: margins, body, text span, blocks |
+| `framing` | `Frame`, `Framing`, `estimate_framing`, `round_margin`: the margins the pages share |
+| `layout` | `LayoutAnalysis`: margins, frame, body, text span, blocks |
 | `structure` | `StructureAnalysis`: headings and questions from typography; `normalize` |
 | `numbering` | `NumberingAnalysis`, `NumberingProfile`, `pattern` |
 | `cropping` | `Cropper`: every selection reduced to `between(start, end)`; `SelectionError` |
@@ -65,7 +66,8 @@ from enoncepdf import Statement, PdfiumDocument, locate, CompiledStatement, Crop
 | `compiled` | `CompiledStatement`: questions of a LaTeX statement built from crops |
 | `cli` | the `enoncepdf` command |
 
-Imports go one way: `models` ← readers ← analyses ← `cropping` ← `statement` ← `cli`.
+Imports go one way: `models` ← readers ← analyses ← `cropping` ← `statement` ← `cli`;
+`framing` is read by `layout`, and reads it back only to measure.
 
 ## 3. Data: `enoncepdf.models`
 
@@ -263,9 +265,11 @@ LayoutAnalysis(document: PdfDocument)
 | Member | Returns |
 | --- | --- |
 | `margins(page=None)` | the `Margin`s of one page, or of the whole document |
-| `body(page)` | the `Box` between header and footer, across the document's text span |
-| `text_span()` | `(left, right)`: the extent of the body's ink over the whole document |
-| `body_ink(page, vertical_only=False)` | the ink mask with margins erased and the outside of the body blank; `vertical_only` keeps the full width |
+| `framing()` | the `Framing` the pages share (*The frame*, below), computed once |
+| `body(page, framing=None)` | the `Box` inside the frame of the page, between header and footer |
+| `text_span()` | `(left, right)`: the extent of the ink outside the margins over the whole document — what the title of the subject is centred on |
+| `free_ink(page)` | the ink mask with margins erased and the header and footer bands blank: what the frame is measured on |
+| `body_ink(page, framing=None)` | `free_ink`, blank outside the body |
 | `blocks(page, gap=6)` | the `Block`s of the page, bands of ink separated by at least `gap` bp of white |
 
 ### The rules for margins
@@ -285,9 +289,55 @@ Candidates are the lines in the top or bottom **band** of the page, 12 % of its 
   or bottom band at the same height (within 3 bp) on half the pages at least, in a
   document of 3 pages or more.
 
-The **body** of a page runs from 1 bp below its lowest header to 1 bp above its highest
-footer. Its width is `text_span()`, the same on every page, so that crops of one
-statement share one scale.
+The **body** of a page is its frame (*The frame*, below), cut 1 bp below its lowest header and
+1 bp above its highest footer. Its width is the frame's, the same on every page but
+the exceptions, so that the crops of one statement share one scale.
+
+### The frame: `enoncepdf.framing`
+
+```python
+Frame(left=None, top=None, right=None, bottom=None)   # margins in cm from the edges
+Framing(common: Frame, pages: Mapping[int, Frame] = {}, scanned: bool = False)
+estimate_framing(layout) -> Framing                    # what LayoutAnalysis.framing() returns
+round_margin(margin_cm) -> float
+```
+
+A `Frame` is what is cut on each side of a page. In an exception, a `None` side follows
+the common frame: `Frame(left=1.0)` widens the left side only.
+
+| Member | Returns |
+| --- | --- |
+| `Frame.over(common)` | the frame with its `None` sides taken from `common` |
+| `Frame.box(width, height)` | the kept area of a page of that size, in bp |
+| `Frame.as_list()`, `Frame.of_list(values)` | `[left, top, right, bottom]` and back |
+| `Framing.frame(page)` | the frame applied to a page, every side given |
+| `Framing.with_common(frame)` | the same exceptions under another common frame |
+| `Framing.as_dict()`, `Framing.of_dict(data)` | `{"common": [...], "pages": {"3": [...]}, "scanned": …}` and back; `ValueError` if the common frame has not four non-negative margins |
+
+How the frame is found:
+
+- **Pages that decide**: those with text whose ink covers a tenth of their rows at
+  least, page 1 left out when there are three pages or more. A document with text on
+  fewer than half its pages is a **scan**: every page gets its own frame, at the
+  millimetre outside its ink.
+- **Left and right**: on the ink of the deciding pages (`free_ink`), the margin with
+  the most others within 3 mm inside it, the outermost of equals — the edge of the text
+  column, not moved by a few wide figures nor by a document réponse framed to the edge.
+- **Top and bottom**: the outermost ink of the deciding pages that fit the column. A
+  crop is tightened on the ink vertically, so the frame only has to bound it, and a
+  page that ends early is no exception.
+- **Rounding** (`round_margin`): the half-centimetre when the ink starts at most 2 mm
+  inside it, or one pixel (0.35 mm) outside — the precision of the 72 dpi mask; else the
+  millimetre with 1 mm of white. The half-centimetre is then checked: a strip of
+  1.5 bp outside the edge is rendered at 576 dpi on every deciding page that fits the
+  frame, margins (line numbers, headers) erased, and the half-centimetre is kept only
+  if it cuts the ink of a tenth of them at most (two at most); otherwise the millimetre.
+- **Exceptions**: a page whose ink goes more than 1 bp beyond the frame, or reaches the
+  576 dpi strip, gets the sides it overflows, at the millimetre outside its ink with
+  half a millimetre of white.
+
+What stays cut: at most the sub-pixel overlap of ink set across the edge itself —
+measured at 0.05 to 0.07 bp (0.02 mm) on 40 real papers.
 
 ## 8. Headings and questions: `StructureAnalysis`
 
@@ -369,18 +419,18 @@ asked for, so that it does not take back the descender of a heading left out.
 
 | Method | Crops |
 | --- | --- |
-| `part(selection, with_heading=True, within=None, intro=False)` | from the heading to the next heading of the same level or higher; `intro`: to the next heading of any level |
-| `questions(first, last, within=None)` | from question `first` to whatever follows question `last` (a question or a heading) |
-| `pages(first, last=None)` | the body of whole pages |
-| `blocks(page, first, last=None, gap=6)` | blocks of one page, numbered from 1 as in `LayoutAnalysis.blocks` |
-| `between(start, end)` | the one operation: the flow from a `Position` to another (None: the end) |
+| `part(selection, with_heading=True, within=None, intro=False, framing=None)` | from the heading to the next heading of the same level or higher; `intro`: to the next heading of any level |
+| `questions(first, last, within=None, framing=None)` | from question `first` to whatever follows question `last` (a question or a heading) |
+| `pages(first, last=None, framing=None)` | the body of whole pages |
+| `blocks(page, first, last=None, gap=6, framing=None)` | blocks of one page, numbered from 1 as in `LayoutAnalysis.blocks` |
+| `between(start, end, framing=None)` | the one operation: the flow from a `Position` to another (None: the end) |
 | `find_heading(selection, within=None)` | the `Heading` a selection names |
 | `span(within)` | the bounds of a part in document order, `((page, y), (page, y) or None)` |
 
 `between` keeps, on each page crossed, the body between the two positions, then
-tightens it on the ink; a page whose slice has no ink gives no crop. All crops of one
-call share the same left and right edges: the extent of the ink over all the pages
-crossed.
+tightens it on the ink from top and bottom; a page whose slice has no ink gives no
+crop. Left and right, a crop is the frame of its page (`framing`, or the one found):
+all the crops of a paper share them, but on the pages that are exceptions.
 
 The start of a part is the first blank pixel row above its heading (within 8 bp) —
 text boxes come from font metrics, and an accent can rise above them; without the
@@ -415,10 +465,11 @@ file.
 | --- | --- |
 | `path` | the file |
 | `headings`, `questions`, `margins` | as the analyses give them |
+| `framing` | `LayoutAnalysis.framing()`: the frame found, and its exceptions |
 | `blocks(page, gap=6)` | `LayoutAnalysis.blocks` |
 | `heading(selection, within=None)` | `Cropper.find_heading` |
-| `crop(part=None, *, with_heading=True, intro=False, within=None, questions=None, pages=None)` | the crops of one selection, or of the whole document; `ValueError` for several selections |
-| `crop_blocks(page, first, last=None, gap=6)` | `Cropper.blocks` |
+| `crop(part=None, *, with_heading=True, intro=False, within=None, questions=None, pages=None, framing=None)` | the crops of one selection, or of the whole document, inside `framing` or the frame found; `ValueError` for several selections |
+| `crop_blocks(page, first, last=None, gap=6, framing=None)` | `Cropper.blocks` |
 | `format(crops, template=GRAPHICX_TEMPLATE, file=None)` | one line per crop, `{file}` being `file` or the PDF's stem |
 | `under(heading)` | `(headings, questions)` strictly inside a part, the whole document for None |
 | `numbering(within=None)` | the `NumberingProfile` of the document or of one part |
@@ -548,14 +599,16 @@ and prints the message of a `SelectionError` on stderr.
 
 | Command | Arguments |
 | --- | --- |
-| `structure PDF` | — |
+| `structure PDF` | headings, questions, margins, and the frame with its exceptions (`·` a side that follows the common frame) |
 | `crop PDF [selection] [output] [--sheet PNG]` | the page and trim of each crop; writes a contact sheet |
 | `blocks PDF PAGE [--gap BP] [--from N --to M [output]]` | lists the blocks, or crops blocks N to M |
 | `sheet PDF [--pages A-B] [-o PNG]` | writes a sheet of pages (to the temp folder by default) and prints its path |
 | `numbering PDF [--within PART]` | the profile, one field per line |
 
 A *selection* is one of `--part TEXT` (with `--without-heading`, `--intro`,
-`--within TEXT`), `--questions RANGE`, `--pages RANGE`. A range reads « 1-10 »,
+`--within TEXT`), `--questions RANGE`, `--pages RANGE`; `--frame L,T,R,B` replaces the
+common frame by these margins in cm, the exceptions found kept
+(`enoncepdf.cli.parse_frame`). A range reads « 1-10 »,
 « Q1-10 », « Q1-Q10 », « p3 », in either order; `enoncepdf.cli.parse_range` parses it.
 
 The *output* is, by default, one line per crop, `page N L=…cm B=…cm R=…cm U=…cm`; or
