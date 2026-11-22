@@ -40,6 +40,19 @@ def test_fragments_on_one_baseline_make_one_line(draw):
     assert (line.text, line.bold, line.all_bold) == ("1 Le piège électrique", True, False)
 
 
+def test_body_size_is_that_of_most_characters(draw):
+    """« 1- » in bold at 8.5 pt opens a question at 10 pt: one line, its body at 10 pt."""
+
+    def paint(sheet):
+        sheet.setFont("Helvetica-Bold", 8.5)
+        sheet.drawString(72, 700, "1-")
+        sheet.setFont("Helvetica", 10)
+        sheet.drawString(85, 700, "Faisons un tableau d'avancement.")
+
+    [line] = draw(paint).lines(1)
+    assert (line.size, line.body_size) == (8.5, 10.0)
+
+
 def test_a_small_number_on_the_baseline_stays_apart(draw):
     """A line number at size 6 on the baseline of a text at size 11 must be recognised
     as a margin: it is not glued to the line."""

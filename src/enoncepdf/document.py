@@ -47,7 +47,7 @@ import pypdfium2
 import pypdfium2.raw as pdfium_c
 from PIL import Image
 
-from enoncepdf._pdfium import CharReader
+from enoncepdf._pdfium import CharReader, body_size
 from enoncepdf.models import Box, Line
 from enoncepdf.text import readable_text
 
@@ -205,6 +205,7 @@ class PdfDocument:
                     bold=first.bold,
                     italic=first.italic,
                     all_bold=all(f.bold for f in group),
+                    body_size=body_size((round(f.size, 1), len(f.chars)) for f in group),
                 )
             )
         lines.sort(key=lambda line: (line.box.y0, line.box.x0))

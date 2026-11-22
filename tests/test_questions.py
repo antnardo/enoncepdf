@@ -109,6 +109,25 @@ def test_a_number_off_the_running_size_is_not_a_question():
     assert [mark.ref for mark in found] == ["1"]
 
 
+def test_a_smaller_number_opening_a_question_at_the_running_size_is_a_question():
+    """« 1- » in bold measures 8.6 pt over a text at 10.1 pt: the body of the line is at
+    the running size, the line opens a question."""
+    running = "Une ligne du texte courant, assez longue pour mesurer son corps."
+
+    def line(text, size, rank, body=None):
+        box = Box(50, 20 * rank, 500, 20 * rank + 10)
+        return Line(1, box, text, size, False, False, False, body)
+
+    found = marks(
+        [
+            *(line(running, 10.1, rank) for rank in range(3)),
+            line("1- Faisons un tableau d'avancement pour prendre en compte", 8.6, 3, 10.1),
+            line("0 – un indice mal lu", 7.0, 4, 7.0),
+        ]
+    )
+    assert [mark.ref for mark in found] == ["1"]
+
+
 def test_the_position_is_that_of_the_line():
     [question] = locate(lines("Titre", "12) Calculer", page=3))
     assert (question.page, question.box) == (3, Box(50, 20, 500, 30))

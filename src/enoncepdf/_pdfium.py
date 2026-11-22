@@ -24,11 +24,13 @@ import ctypes
 import io
 import math
 import re
+from collections import Counter
+from collections.abc import Iterable
 
 import pypdfium2.raw as pdfium_c
 from PIL import ImageFont
 
-__all__ = ["CharReader"]
+__all__ = ["CharReader", "body_size"]
 
 _BOLD = re.compile(
     r"Bold|Medi|Bd|Black|Heavy|Semi[Bb]old"
@@ -106,3 +108,12 @@ def _program_style(textpage: ctypes.c_void_p, index: int) -> str | None:
     except (OSError, ValueError):
         return None
     return style
+
+
+def body_size(sizes: Iterable[tuple[float, int]]) -> float | None:
+    """The size most characters of a line have, from ``(size, count)`` pairs; at a tie,
+    the largest — an index is smaller than the text it hangs on."""
+    counts: Counter[float] = Counter()
+    for size, count in sizes:
+        counts[size] += count
+    return max(counts, key=lambda size: (counts[size], size)) if counts else None

@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pypdfium2
 
-from enoncepdf._pdfium import CharReader
+from enoncepdf._pdfium import CharReader, body_size
 from enoncepdf.models import Box, Line
 from enoncepdf.text import readable_text
 
@@ -100,6 +100,7 @@ class PdfiumDocument:
                     bold=first.bold,
                     italic=first.italic,
                     all_bold=all(c.bold for c in visible),
+                    body_size=body_size((round(c.size, 1), 1) for c in visible),
                 )
             )
         lines.sort(key=lambda line: (line.box.y0, line.box.x0))

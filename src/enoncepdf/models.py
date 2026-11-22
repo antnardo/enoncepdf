@@ -68,7 +68,11 @@ class Box:
 class Line:
     """A visual line of text: its page, its box, its text as one reads it, the effective
     size of its first character in points, and its style — of the first character
-    (``bold``, ``italic``) and of all of them (``all_bold``)."""
+    (``bold``, ``italic``) and of all of them (``all_bold``).
+
+    ``body_size`` is the size most of its characters have, None when unknown: a bold
+    number opening a question may measure a point and a half below the text it opens,
+    and only the body tells a question from an index or a heading."""
 
     page: int
     box: Box
@@ -77,6 +81,7 @@ class Line:
     bold: bool
     italic: bool
     all_bold: bool
+    body_size: float | None = None
 
 
 class MarginKind(StrEnum):

@@ -159,14 +159,16 @@ def match(title: str, located: Sequence[LocatedQuestion], other: str | None = No
 
 def _running_size(lines: Sequence[Line]) -> float | None:
     """The size of the running text: the median of the long lines, if there are enough."""
-    long = [line.size for line in lines if len(line.text) > _LONG_LINE and line.size > 0]
+    long = [own for line in lines if len(line.text) > _LONG_LINE and (own := line.body_size or line.size) > 0]
     return statistics.median(long) if len(long) >= 3 else None
 
 
 def _at_running_size(line: Line, size: float | None) -> bool:
-    if size is None or line.size <= 0:
+    """Whether the body of the line is at the running size: its number may not be."""
+    own = line.body_size or line.size
+    if size is None or own <= 0:
         return True
-    return size - _SIZE_BELOW <= line.size <= size + _SIZE_ABOVE
+    return size - _SIZE_BELOW <= own <= size + _SIZE_ABOVE
 
 
 def _question(found: re.Match[str], line: Line) -> Mark:

@@ -27,6 +27,13 @@ The pages of a paper share one frame: the crops take it.
 - `LayoutAnalysis.body` and `body_ink` take `framing=`; `body_ink` loses
   `vertical_only`, which `free_ink` replaces.
 
+### Fixed
+
+- A question whose bold number measures more than a point below its text (« 1- » at
+  8.6 pt over a text at 10.1 pt) is found: `questions` judges a line by its body, the
+  new `Line.body_size` — the size most of its characters have —, no longer by its
+  first character.
+
 ## [0.2.0] — 2026-10-18
 
 The output of a crop is its page and its trim; how they are written is the caller's.

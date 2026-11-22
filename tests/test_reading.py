@@ -30,6 +30,21 @@ def test_size_is_the_effective_size(tmp_path):
     assert (heading.size, heading.bold, heading.all_bold) == (12.0, True, True)
 
 
+def test_body_size_is_that_of_most_characters(tmp_path):
+    """« 1- » in bold at 8.5 pt opens a question at 10 pt: the line keeps the size of its
+    first character, its body is at 10 pt."""
+    path = tmp_path / "label.pdf"
+    sheet = Canvas(str(path), pagesize=A4)
+    sheet.setFont("Helvetica-Bold", 8.5)
+    sheet.drawString(72, 700, "1-")
+    sheet.setFont("Helvetica", 10)
+    sheet.drawString(85, 700, "Faisons un tableau d'avancement.")
+    sheet.showPage()
+    sheet.save()
+    [line] = PdfiumDocument(path).lines(1)
+    assert (line.size, line.body_size) == (8.5, 10.0)
+
+
 def test_cropbox_is_the_visible_page_and_area_filters_lines(tmp_path):
     path = tmp_path / "crop.pdf"
     sheet = Canvas(str(path), pagesize=A4)
