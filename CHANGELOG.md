@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-11-22
+
 The pages of a paper share one frame: the crops take it.
 
 ### Added
@@ -80,5 +82,7 @@ First public release.
   the embedded font program.
 - `scripts/survey.py`, to measure a change on a set of real papers.
 
+[Unreleased]: https://github.com/antnardo/enoncepdf/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/antnardo/enoncepdf/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/antnardo/enoncepdf/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/antnardo/enoncepdf/releases/tag/v0.1.0

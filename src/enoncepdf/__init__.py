@@ -41,7 +41,7 @@ from enoncepdf.statement import Statement
 from enoncepdf.structure import StructureAnalysis, normalize
 from enoncepdf.text import readable_text
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
     "BP_PER_CM",
